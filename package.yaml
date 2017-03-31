@@ -1,0 +1,36 @@
+name:                inspector
+version:             "0.1"
+homepage:            https://github.com/primetype/inspector#readme
+license:             BSD3
+author:              Nicolas Di Prima
+maintainer:          nicolas@primetype.co.uk
+copyright:           2017-2018 PrimeType Ltd
+category:            Testing
+extra-source-files:
+- README.md
+- LICENSE
+
+dependencies:
+  - base
+  - basement
+  - foundation
+  - memory
+  - cryptonite
+
+default-extensions:
+    - NoImplicitPrelude
+    - TypeFamilies
+    - DataKinds
+    - OverloadedStrings
+
+library:
+  source-dirs: src
+  exposed-modules:
+    - Inspector
+    - Inspector.Parser
+    - Inspector.Display
+  other-modules:
+    - Inspector.Method
+    - Inspector.Dict
+    - Inspector.Monad
+    - Inspector.Report

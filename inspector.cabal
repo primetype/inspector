@@ -1,0 +1,42 @@
+-- This file has been generated from package.yaml by hpack version 0.20.0.
+--
+-- see: https://github.com/sol/hpack
+--
+-- hash: 4036f578f8fc6d0bffd45f230e42402b0f9422b63b71be0467a2521261be2642
+
+name:           inspector
+version:        0.1
+category:       Testing
+homepage:       https://github.com/primetype/inspector#readme
+author:         Nicolas Di Prima
+maintainer:     nicolas@primetype.co.uk
+copyright:      2017-2018 PrimeType Ltd
+license:        BSD3
+license-file:   LICENSE
+build-type:     Simple
+cabal-version:  >= 1.10
+
+extra-source-files:
+    LICENSE
+    README.md
+
+library
+  hs-source-dirs:
+      src
+  default-extensions: NoImplicitPrelude TypeFamilies DataKinds OverloadedStrings
+  build-depends:
+      base
+    , basement
+    , cryptonite
+    , foundation
+    , memory
+  exposed-modules:
+      Inspector
+      Inspector.Parser
+      Inspector.Display
+  other-modules:
+      Inspector.Method
+      Inspector.Dict
+      Inspector.Monad
+      Inspector.Report
+  default-language: Haskell2010
