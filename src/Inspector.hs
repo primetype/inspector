@@ -2,7 +2,6 @@ module Inspector
     ( module X
     , Config(..)
     , Mode(..)
-    , runGolden
     , defaultMain
     , GoldenMT
     ) where
@@ -29,4 +28,4 @@ defaultMain suites = do
             ["generate", "js"] -> Generate JS
             ["generate", "haskell"] -> Generate Haskell
             _ -> error "possible options are: <test|generate [vectors|markdown|rust|C|js|haskell]>"
-    void $ runGolden (Config mode "tests/goldens") suites
+    void $ runGolden' (Config mode "tests/goldens") suites
