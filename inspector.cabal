@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 4036f578f8fc6d0bffd45f230e42402b0f9422b63b71be0467a2521261be2642
+-- hash: fda385a360272beb8bb41278e8a982d071c22f3aee864550ca600190a8020a67
 
 name:           inspector
 version:        0.1
@@ -39,4 +39,21 @@ library
       Inspector.Dict
       Inspector.Monad
       Inspector.Report
+  default-language: Haskell2010
+
+executable example
+  main-is: Main.hs
+  hs-source-dirs:
+      example/
+  default-extensions: NoImplicitPrelude TypeFamilies DataKinds OverloadedStrings
+  ghc-options: -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      base
+    , basement
+    , cryptonite
+    , foundation
+    , inspector
+    , memory
+  other-modules:
+      Paths_inspector
   default-language: Haskell2010

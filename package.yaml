@@ -34,3 +34,14 @@ library:
     - Inspector.Dict
     - Inspector.Monad
     - Inspector.Report
+
+executables:
+  example:
+    main:        Main.hs
+    source-dirs: example/
+    dependencies:
+    - inspector
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N

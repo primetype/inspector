@@ -78,19 +78,15 @@ mkPath target = do
 
 -- | Monad responsible for controlling the execution flow of the test vectors
 --
-data Metadata = Metadata
-    { metaDescription :: !Builder
+newtype Metadata = Metadata
+    { metaDescription :: Builder
     }
-  deriving (Typeable)
-instance Semigroup Metadata
-instance Monoid Metadata where
-    mempty = Metadata mempty
-    mappend = (<>)
+  deriving (Typeable, Semigroup, Monoid)
 
 type GoldenT = GoldenMT Metadata IO
 
 describe :: Builder -> GoldenT ()
-describe builder = withState $ const ((), Metadata builder)
+describe builder = withState $ \st -> ((), st { metaDescription = builder })
 
 -- | Monad for a running golden test
 --

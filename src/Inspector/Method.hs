@@ -15,6 +15,7 @@ module Inspector.Method
     , Value
     , Golden
     , golden
+    , group
     ) where
 
 import Foundation
@@ -76,10 +77,12 @@ golden proxy action = do
                          in if null diffs then Success else Failure idx diffs
             pretty $ Report path rs
         Generate TestVector -> storeBackDics file $ (\(_,_,d) -> d) <$> r
-        Generate _ -> undefined
+        Generate exportType -> void $ withState $ export proxy exportType (\(_,_,d) -> d <$> r)
   where
     path :: FilePath
     path = unsafeFilePath Relative (getPath proxy)
+
+    export = undefined
 
 data (i :: k) :> o
   deriving (Typeable)
@@ -163,7 +166,7 @@ instance (KnownSymbol key, HasMethod sub, Value value, Arbitrary value) => HasMe
     method _ action dict = do
         mvalue <- retrieve @key @value Proxy dict
         value <- case mvalue of
-            Nothing -> pure undefined -- TODO ? gen ?
+            Nothing -> error $ "missing key: " <> fromString (symbolVal (Proxy @key))
             Just value -> pure value
         store (Proxy @key) value
         method (Proxy @sub) (action value) dict
