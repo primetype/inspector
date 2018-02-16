@@ -10,12 +10,13 @@ module Inspector.Method
     ( (:>)
     , Payload
     , HasPath
+    , getPath
     , HasMethod
+    , Method
+    , method
     , PathParameter
     , Value
     , Golden
-    , golden
-    , group
     ) where
 
 import Foundation
@@ -31,7 +32,6 @@ import Data.ByteArray.Encoding
 import Control.Monad (when, void, forM, forM_)
 import GHC.TypeLits
 import Data.Typeable
-import Data.List (zip3)
 
 import Inspector.Dict
 import Inspector.Parser
@@ -45,44 +45,6 @@ type Value value = (HasParser value, Typeable value, Display value)
 -- | Alias Constraint type for golden test
 type Golden golden = (HasMethod golden, HasPath golden)
 
--- | group a set of golden tests
-group :: GoldenT () -> GoldenT ()
-group = void . exec
-
--- | generate the golden test from the specification and the method
---
--- @
--- import Crypto.Hash (hash, Digest, SHA1)
---
--- type GoldenSHA1 = "hash" :> "SHA1" :> Payload "payload" String :> Payload "hash" (Digest SHA1)
--- golden (Proxy @GoldenSHA1) hash
--- @
---
-golden :: Golden method
-       => Proxy method
-       -> Method method
-       -> GoldenT ()
-golden proxy action = do
-    file <- mkPath path
-    -- 1. collect the Dicts
-    dics <- collectDics file
-    -- 2. execute the method according to the plan
-    r <- zip3 [1..] dics <$> forM dics (exec . method proxy action)
-
-    mode <- getMode <$> ask
-    case mode of
-        GoldenTest -> do
-            let rs = flip fmap r $ \(idx, org, new) ->
-                        let diffs = diff org new
-                         in if null diffs then Success else Failure idx diffs
-            pretty $ Report path rs
-        Generate TestVector -> storeBackDics file $ (\(_,_,d) -> d) <$> r
-        Generate exportType -> void $ withState $ export proxy exportType (\(_,_,d) -> d <$> r)
-  where
-    path :: FilePath
-    path = unsafeFilePath Relative (getPath proxy)
-
-    export = undefined
 
 data (i :: k) :> o
   deriving (Typeable)
