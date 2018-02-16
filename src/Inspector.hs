@@ -3,7 +3,7 @@ module Inspector
       Golden
     , golden
     , group
-    , describe
+    , summary
 
     , -- ** defining a golden test
       Payload
@@ -24,6 +24,7 @@ import Inspector.Display
 import Inspector.Monad
 import Inspector.Report
 import Inspector.Method
+import Inspector.Export
 
 import Foundation
 import Foundation.VFS.FilePath
@@ -82,9 +83,9 @@ golden proxy action = do
                          in if null diffs then Success else Failure idx diffs
             pretty $ Report path rs
         Generate TestVector -> storeBackDics file $ (\(_,_,d) -> d) <$> r
-        Generate exportType -> void $ withState $ export proxy exportType (\(_,_,d) -> d <$> r)
+        Generate t -> void $ do
+            st <- withState $ \st -> (st, st)
+            export t proxy file st $ (\(_,_,d) -> d) <$> r
   where
     path :: FilePath
     path = unsafeFilePath Relative (getPath proxy)
-
-    export = undefined

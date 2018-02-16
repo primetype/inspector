@@ -1,5 +1,5 @@
 name:                inspector
-version:             "0.1"
+version:             "0.2"
 homepage:            https://github.com/primetype/inspector#readme
 license:             BSD3
 author:              Nicolas Di Prima
@@ -34,6 +34,9 @@ library:
     - Inspector.Dict
     - Inspector.Monad
     - Inspector.Report
+    - Inspector.Export
+    - Inspector.Export.Markdown
+    - Inspector.Export.Types
 
 executables:
   example:

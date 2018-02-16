@@ -2,10 +2,10 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: fda385a360272beb8bb41278e8a982d071c22f3aee864550ca600190a8020a67
+-- hash: 37b39d4cfd3cc2d569e77385860cf8f45f6a2533bf1fde60d954cdb510e584a8
 
 name:           inspector
-version:        0.1
+version:        0.2
 category:       Testing
 homepage:       https://github.com/primetype/inspector#readme
 author:         Nicolas Di Prima
@@ -39,6 +39,9 @@ library
       Inspector.Dict
       Inspector.Monad
       Inspector.Report
+      Inspector.Export
+      Inspector.Export.Markdown
+      Inspector.Export.Types
   default-language: Haskell2010
 
 executable example

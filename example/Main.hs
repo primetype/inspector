@@ -20,7 +20,11 @@ type GoldenPBKDF2 = "kdf" :> "PBKDF2" :> "SHA1"
 
 main :: IO ()
 main = defaultMain $ do
-    golden (Proxy @GoldenSHA1) hash
-    golden (Proxy @GoldenSHA256) hash
-    golden (Proxy @GoldenPBKDF2) $ \iter len pwd salt ->
-        fastPBKDF2_SHA1 (Parameters iter len) pwd salt
+    group $ do
+        summary "Secure Hash Algorithm"
+        golden (Proxy @GoldenSHA1) hash
+        golden (Proxy @GoldenSHA256) hash
+    group $ do
+        summary "Password-Based Key Derivation"
+        golden (Proxy @GoldenPBKDF2) $ \iter len pwd salt ->
+            fastPBKDF2_SHA1 (Parameters iter len) pwd salt

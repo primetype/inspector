@@ -14,6 +14,7 @@ module Inspector.Method
     , HasMethod
     , Method
     , method
+    , describe
     , PathParameter
     , Value
     , Golden
@@ -38,6 +39,7 @@ import Inspector.Parser
 import Inspector.Display
 import Inspector.Monad
 import Inspector.Report
+import Inspector.Export.Types
 
 -- | Alias Constraint Type for Value type
 type Value value = (HasParser value, Typeable value, Display value)
@@ -114,17 +116,22 @@ class HasMethod method where
 
     method :: Proxy method -> Method method -> Dict -> GoldenM ()
 
+    describe :: Proxy method -> Export
+
 instance (KnownSymbol path, HasMethod sub) => HasMethod (path :> sub) where
     type Method (path :> sub) = Method sub
     method _ = method (Proxy @sub)
+    describe _ = describe (Proxy @sub)
 
 instance (KnownSymbol path, KnownNat n, HasMethod sub) => HasMethod (PathParameter path n :> sub) where
     type Method (PathParameter path n :> sub) = Method sub
     method _ = method (Proxy @sub)
+    describe _ = describe (Proxy @sub)
 
 instance (KnownSymbol key, HasMethod sub, Value value, Arbitrary value) => HasMethod (Payload key value :> sub) where
     type Method (Payload key value :> sub) = value -> Method sub
 
+    describe _ = input (mkDesc (Proxy @key) (Proxy @value)) <> describe (Proxy @sub)
     method _ action dict = do
         mvalue <- retrieve @key @value Proxy dict
         value <- case mvalue of
@@ -133,12 +140,21 @@ instance (KnownSymbol key, HasMethod sub, Value value, Arbitrary value) => HasMe
         store (Proxy @key) value
         method (Proxy @sub) (action value) dict
 
+mkDesc :: forall key value . (KnownSymbol key, Value value) => Proxy key -> Proxy value -> Description
+mkDesc pkey pval = Description
+    { descriptionKey = fromList $ symbolVal (Proxy @key)
+    , descriptionEncoding = encoding (Proxy @value)
+    , descriptionType = typeRep (Proxy @value)
+    , descriptionComment = comment (Proxy @value)
+    }
+
 instance (KnownSymbol key, Value value) => HasMethod (Payload key value) where
     type Method (Payload key value) = value
 
     method methProxy action dict = do
         void $ retrieve @key @value Proxy dict
         store (Proxy @key) action
+    describe _ = output (mkDesc (Proxy @key) (Proxy @value))
 
 instance ( KnownSymbol k1, Value v1
          , KnownSymbol k2, Value v2
@@ -157,6 +173,8 @@ instance ( KnownSymbol k1, Value v1
         let (v1, v2) = action
         store (Proxy @k1) v1
         store (Proxy @k2) v2
+    describe _ = output (mkDesc (Proxy @k1) (Proxy @v1))
+              <> output (mkDesc (Proxy @k2) (Proxy @v2))
 
 instance ( KnownSymbol k1, Value v1
          , KnownSymbol k2, Value v2
@@ -180,6 +198,9 @@ instance ( KnownSymbol k1, Value v1
         store (Proxy @k1) v1
         store (Proxy @k2) v2
         store (Proxy @k3) v3
+    describe _ = output (mkDesc (Proxy @k1) (Proxy @v1))
+              <> output (mkDesc (Proxy @k2) (Proxy @v2))
+              <> output (mkDesc (Proxy @k3) (Proxy @v3))
 
 instance ( KnownSymbol k1, Value v1
          , KnownSymbol k2, Value v2
@@ -208,6 +229,10 @@ instance ( KnownSymbol k1, Value v1
         store (Proxy @k2) v2
         store (Proxy @k3) v3
         store (Proxy @k4) v4
+    describe _ = output (mkDesc (Proxy @k1) (Proxy @v1))
+              <> output (mkDesc (Proxy @k2) (Proxy @v2))
+              <> output (mkDesc (Proxy @k3) (Proxy @v3))
+              <> output (mkDesc (Proxy @k4) (Proxy @v4))
 
 -- helper method to retrieve a value from a dictionary
 retrieve :: forall key value

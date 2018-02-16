@@ -17,8 +17,9 @@ module Inspector.Monad
     , store
 
     , GoldenT
+    , Metadata(..)
 
-    , describe
+    , summary
     , Builder
     ) where
 
@@ -79,14 +80,14 @@ mkPath target = do
 -- | Monad responsible for controlling the execution flow of the test vectors
 --
 newtype Metadata = Metadata
-    { metaDescription :: Builder
+    { metaDescription :: String
     }
   deriving (Typeable, Semigroup, Monoid)
 
 type GoldenT = GoldenMT Metadata IO
 
-describe :: Builder -> GoldenT ()
-describe builder = withState $ \st -> ((), st { metaDescription = builder })
+summary :: String -> GoldenT ()
+summary builder = withState $ \st -> ((), st { metaDescription = builder })
 
 -- | Monad for a running golden test
 --
