@@ -4,6 +4,7 @@ module Inspector
     , Mode(..)
     , defaultMain
     , GoldenMT
+    , GoldenT
     ) where
 
 import Control.Monad (void)
