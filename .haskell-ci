@@ -1,0 +1,17 @@
+# compiler supported and their equivalent LTS
+compiler: ghc-8.2 lts-10.5
+compiler: ghc-8.4 ghc-8.4-alpha2
+
+# options
+
+# builds 
+build: ghc-8.2
+build: ghc-8.4
+
+# packages
+package: '.'
+
+# extra builds
+hlint: allowed-failure
+weeder: allowed-failure
+coverall: false
