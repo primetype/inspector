@@ -78,6 +78,19 @@ instance HashAlgorithm a => HasParser (Digest a) where
 instance HashAlgorithm a => HasParser (HMAC a) where
     getParser = HMAC <$> getParser
 
+instance HasParser a => HasParser [a] where
+    getParser = do
+        element '['
+        l <- go
+        element ']'
+        pure l
+      where
+        go = do
+            skipWhile (`elem` [' ', '\t'])
+            r <- getParser
+            skipWhile (`elem` [' ', '\t'])
+            (element ',' *> ((:) r <$> go)) <|> pure [r]
+
 parseByteArray :: (ByteArrayAccess ba, ByteArray a) => ba -> Parser String a
 parseByteArray input = case convertFromBase Base16 input of
     Left err -> reportError (Expected "Base16" (fromList err))
