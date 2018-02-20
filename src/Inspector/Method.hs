@@ -233,6 +233,86 @@ instance ( KnownSymbol k1, Value v1
               <> output (mkDesc (Proxy @k2) (Proxy @v2))
               <> output (mkDesc (Proxy @k3) (Proxy @v3))
               <> output (mkDesc (Proxy @k4) (Proxy @v4))
+instance ( KnownSymbol k1, Value v1
+         , KnownSymbol k2, Value v2
+         , KnownSymbol k3, Value v3
+         , KnownSymbol k4, Value v4
+         , KnownSymbol k5, Value v5
+         )
+      => HasMethod ( Payload k1 v1
+                   , Payload k2 v2
+                   , Payload k3 v3
+                   , Payload k4 v4
+                   , Payload k5 v5
+                   )
+   where
+    type Method ( Payload k1 v1
+                , Payload k2 v2
+                , Payload k3 v3
+                , Payload k4 v4
+                , Payload k5 v5
+                ) = (v1, v2, v3, v4, v5)
+
+    method methProxy action dict = do
+        void $ retrieve @k1 @v1 Proxy dict
+        void $ retrieve @k2 @v2 Proxy dict
+        void $ retrieve @k3 @v3 Proxy dict
+        void $ retrieve @k4 @v4 Proxy dict
+        void $ retrieve @k5 @v5 Proxy dict
+        let (v1, v2, v3, v4, v5) = action
+        store (Proxy @k1) v1
+        store (Proxy @k2) v2
+        store (Proxy @k3) v3
+        store (Proxy @k4) v4
+        store (Proxy @k5) v5
+    describe _ = output (mkDesc (Proxy @k1) (Proxy @v1))
+              <> output (mkDesc (Proxy @k2) (Proxy @v2))
+              <> output (mkDesc (Proxy @k3) (Proxy @v3))
+              <> output (mkDesc (Proxy @k4) (Proxy @v4))
+              <> output (mkDesc (Proxy @k5) (Proxy @v5))
+instance ( KnownSymbol k1, Value v1
+         , KnownSymbol k2, Value v2
+         , KnownSymbol k3, Value v3
+         , KnownSymbol k4, Value v4
+         , KnownSymbol k5, Value v5
+         , KnownSymbol k6, Value v6
+         )
+      => HasMethod ( Payload k1 v1
+                   , Payload k2 v2
+                   , Payload k3 v3
+                   , Payload k4 v4
+                   , Payload k5 v5
+                   , Payload k6 v6
+                   )
+   where
+    type Method ( Payload k1 v1
+                , Payload k2 v2
+                , Payload k3 v3
+                , Payload k4 v4
+                , Payload k5 v5
+                , Payload k6 v6
+                ) = (v1, v2, v3, v4, v5, v6)
+
+    method methProxy action dict = do
+        void $ retrieve @k1 @v1 Proxy dict
+        void $ retrieve @k2 @v2 Proxy dict
+        void $ retrieve @k3 @v3 Proxy dict
+        void $ retrieve @k4 @v4 Proxy dict
+        void $ retrieve @k5 @v5 Proxy dict
+        void $ retrieve @k6 @v6 Proxy dict
+        let (v1, v2, v3, v4, v5, v6) = action
+        store (Proxy @k1) v1
+        store (Proxy @k2) v2
+        store (Proxy @k3) v3
+        store (Proxy @k4) v4
+        store (Proxy @k5) v5
+        store (Proxy @k6) v6
+    describe _ = output (mkDesc (Proxy @k1) (Proxy @v1))
+              <> output (mkDesc (Proxy @k2) (Proxy @v2))
+              <> output (mkDesc (Proxy @k3) (Proxy @v3))
+              <> output (mkDesc (Proxy @k4) (Proxy @v4))
+              <> output (mkDesc (Proxy @k5) (Proxy @v5))
+              <> output (mkDesc (Proxy @k6) (Proxy @v6))
 
 -- helper method to retrieve a value from a dictionary
 retrieve :: forall key value
