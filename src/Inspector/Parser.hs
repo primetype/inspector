@@ -29,13 +29,13 @@ instance HasParser Bool where
     getParser = (elements "true" >> pure True) <|> (elements "false" >> pure False)
 instance HasParser Integer where
     getParser = do
-        r <- takeAll
+        r <- takeWhile (`elem` ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'])
         case readInteger r of
             Nothing -> reportError (Expected "Integer" "invalid integer")
             Just i  -> pure i
 instance HasParser Natural where
     getParser = do
-        r <- takeAll
+        r <- takeWhile (`elem` ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'])
         case readNatural r of
             Nothing -> reportError (Expected "Natural" "invalid natural")
             Just i  -> pure i
@@ -57,7 +57,7 @@ instance HasParser Word64 where
     getParser = parseIntegral
 instance HasParser Double where
     getParser = do
-        r <- takeAll
+        r <- takeWhile (`elem` ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '.'])
         case readDouble r of
             Nothing -> reportError (Expected "Double" ("received invalid: " <> r))
             Just v  -> pure v
@@ -102,7 +102,7 @@ strParser = element '"' *> takeWhile ('"' /=) <* element '"'
 parseIntegral :: (HasNegation i, IntegralUpsize Word8 i, Additive i, Multiplicative i, IsIntegral i)
               => Parser String i
 parseIntegral = do
-    r <- takeAll
+    r <- takeWhile (`elem` ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'])
     case readIntegral r of
         Nothing -> reportError (Expected "Integral type" ("got " <> r))
         Just v  -> pure v
