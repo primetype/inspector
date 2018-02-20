@@ -81,7 +81,7 @@ instance HashAlgorithm a => HasParser (HMAC a) where
 instance HasParser a => HasParser [a] where
     getParser = do
         element '['
-        l <- go
+        l <- go <|> pure []
         element ']'
         pure l
       where
