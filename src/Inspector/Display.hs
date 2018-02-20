@@ -1,3 +1,5 @@
+{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Inspector.Display
     ( Display (..)
@@ -74,6 +76,9 @@ instance HashAlgorithm hash => Display (Digest hash) where
 instance HashAlgorithm hash => Display (HMAC hash) where
     display = displayByteArrayAccess . hmacGetDigest
     encoding _ = "hexadecimal"
+instance Display a => Display [a] where
+    display l = "[" <> intercalate ", " (display <$> l) <> "]"
+    encoding _ = "list of " <> encoding (Proxy @a)
 
 displayByteArrayAccess :: ByteArrayAccess ba => ba -> String
 displayByteArrayAccess = display . fromBytesUnsafe . convertToBase Base16
