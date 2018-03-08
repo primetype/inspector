@@ -60,7 +60,8 @@ pop :: (Monad m, Golden method) => Proxy method -> Conduit (Word, Dict) String m
 pop p = awaitForever $ \(idx, dic) -> do
     let is = findKeyVal dic inputs
     let os = findKeyVal dic outputs
-    yield $ if idx == 1 then "  [ TestVector { " else "  , TestVector { "
+    yield $ if idx == 1 then "  [ TestVector" else "  , TestVector"
+    yield "\n    { "
     yields $ intersperse "\n    , " $ for is $ \(k,v) -> k <> " : " <> v
     yield "\n    , "
     yields $ intersperse "\n    , " $ for os $ \(k,v) -> k <> " : " <> v

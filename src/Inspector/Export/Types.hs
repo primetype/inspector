@@ -105,6 +105,12 @@ instance Inspectable Int where
     exportType _ _          = emit "Int"
     parser _ = parseIntegral
     display _ = emit . show
+instance Inspectable Integer where
+    documentation _ = "signed unbounded integer"
+    exportType _ Rust       = emit "i128"
+    exportType _ _          = emit "Integer"
+    parser _ = parseIntegral
+    display _ = emit . show
 instance Inspectable Word8 where
     documentation _ = "8 bits unsigned integer."
     exportType _ Rust       = emit "u8"

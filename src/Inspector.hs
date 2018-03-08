@@ -16,6 +16,7 @@ module Inspector
 
     , -- ** Extending Inspectable
       Inspectable(..)
+    , OutputType(..)
 
     , -- * Misc
       Config(..)
@@ -101,7 +102,7 @@ golden proxy action = do
                     traverseWith (store Markdown) proxy action .| genC .| Markdown.pop proxy
                 Generate Rust -> do
                     Rust.summary proxy
-                    yield $  "const GoldenTests : [TestVector;"<> show (fromCount (length dics)) <>"] =\n"
+                    yield $  "const GOLDEN_TESTS : [TestVector;"<> show (fromCount (length dics)) <>"] =\n"
                     traverseWith (store Rust) proxy action .| genC .| Rust.pop proxy
                     yield "  ];\n\n"
     output' <- maybe (pure Nothing) (fmap Just . mkPath) (output mode)
