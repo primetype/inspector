@@ -1,4 +1,6 @@
 {-# LANGUAGE Rank2Types #-}
+{-# LANGUAGE TupleSections #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module Inspector
     ( -- * Golden Test
@@ -33,7 +35,8 @@ import qualified Inspector.Export.Markdown as Markdown
 import qualified Inspector.Export.Rust as Rust
 
 import Foundation
-import Foundation.IO (stdout)
+import Foundation.Monad
+import Foundation.IO (stdout, openFile, closeFile, IOMode(WriteMode))
 import Foundation.String (Encoding(UTF8))
 import Foundation.Conduit
 import Foundation.Conduit.Textual
@@ -81,14 +84,14 @@ golden :: Golden method
 golden proxy action = do
     mode <- getMode <$> ask
 
-    file <- mkPath path
+    file <- mkPath input
     -- 1. collect the Dicts
     dics <- collectDics file
     -- 2. execute the method according to the plan
     let c = case mode of
                 GoldenTest -> traverseWith (store TestVector) proxy action
                            .| diffC
-                           .| (sinkList >>= (yield . Report path))
+                           .| (sinkList >>= (yield . Report input))
                            .| prettyC
                 Generate TestVector -> traverseWith (store TestVector) proxy action
                                     .| genC
@@ -101,10 +104,23 @@ golden proxy action = do
                     yield $  "const GoldenTests : [TestVector;"<> show (fromCount (length dics)) <>"] =\n"
                     traverseWith (store Rust) proxy action .| genC .| Rust.pop proxy
                     yield "  ];\n\n"
-    runConduit $  yields dics .| c .| toBytes UTF8 .| sinkHandle stdout
+    output' <- maybe (pure Nothing) (fmap Just . mkPath) (output mode)
+    (close, h) <- liftIO $ case output' of
+        Nothing -> pure (\_ -> pure (), stdout)
+        Just p  -> (closeFile,) <$> openFile p WriteMode
+    runConduit $  yields dics .| c .| toBytes UTF8 .| sinkHandle h
+    liftIO $ close h
   where
-    path :: FilePath
-    path = unsafeFilePath Relative (getPath proxy)
+    input :: FilePath
+    input = unsafeFilePath Relative path'
+
+    path' = getPath proxy
+
+    output :: Mode -> Maybe FilePath
+    output (Generate TestVector) = Just input
+    output (Generate Markdown) = Just $ fromString (filePathToLString input <> ".md")
+    output (Generate Rust) = Just $  fromString (filePathToLString input <> ".rs")
+    output GoldenTest = Nothing
 
 awaitIndex :: (Word -> input -> Conduit input output m b) -> Conduit input output m ()
 awaitIndex f = go 1
