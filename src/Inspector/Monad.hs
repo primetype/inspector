@@ -95,6 +95,6 @@ getMetadata = withState $ \st -> (st, st)
 type GoldenM = GoldenMT Dict IO
 
 store :: (KnownSymbol key, Inspectable value)
-      => Proxy (key :: Symbol) -> value -> GoldenM ()
-store pk val = withState $ \dict ->
-    ((), add pk (builderToString $ display TestVector val) dict )
+      => OutputType -> Proxy (key :: Symbol) -> value -> GoldenM ()
+store t pk val = withState $ \dict ->
+    ((), add pk (builderToString $ display t val) dict )

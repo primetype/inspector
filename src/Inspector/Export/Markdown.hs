@@ -36,14 +36,14 @@ summary p = do
     yield "\n"
     yield "## Input(s)\n\n"
     yield "```\n"
-    yields $ for inputs $ \(Description key enc ty mcomm) ->
+    yields $ for inputs $ \(Description key enc ty _ mcomm) ->
         let comm = maybe "" (" # " <>) mcomm
          in key <> " (" <> show ty <> ") = " <> show enc <> comm <> "\n"
     yield "```\n"
     yield "\n"
     yield "## Output(s)\n\n"
     yield "```\n"
-    yields $ for outputs $ \(Description key enc ty mcomm) ->
+    yields $ for outputs $ \(Description key enc ty _ mcomm) ->
         let comm = maybe "" (" # " <>) mcomm
          in key <> " (" <> show ty <> ") = " <> show enc <> comm <> "\n"
     yield "```\n"
@@ -51,8 +51,7 @@ summary p = do
     yield "# Test vectors\n\n"
   where
     path = filePathToString $ unsafeFilePath Relative (getPath p)
-    Export inputs outputs = describe p
-
+    Export inputs outputs = describe p Markdown
 
 pop :: (Monad m, Golden method) => Proxy method -> Conduit (Word, Dict) String m ()
 pop p = awaitForever $ \(idx, dic) -> do
@@ -66,13 +65,13 @@ pop p = awaitForever $ \(idx, dic) -> do
     yield "```\n"
     yield "\n"
   where
-    Export inputs outputs = describe p
+    Export inputs outputs = describe p Markdown
 
 for :: [a] -> (a -> b) -> [b]
 for = flip fmap
 
 findKeyVal :: Dict -> [Description] -> [(String, String)]
 findKeyVal _ [] = []
-findKeyVal d (Description k _ _ _:xs) = case lookup k d of
+findKeyVal d (Description k _ _ _ _:xs) = case lookup k d of
     Nothing -> error $ "missing input: " <> k
     Just v  -> (k, v) : findKeyVal d xs

@@ -1,5 +1,9 @@
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE Rank2Types #-}
+
 module Inspector.Export.Rust
-    ( exportRust
+    ( pop
+    , summary
     ) where
 
 import Foundation
@@ -12,7 +16,7 @@ import Foundation.Conduit.Textual
 import Foundation.String (Encoding(UTF8))
 
 import Inspector.Dict
-import Inspector.Monad
+import Inspector.Monad hiding (summary)
 import Inspector.Report
 import Inspector.Method
 
@@ -20,62 +24,55 @@ import Inspector.Export.Types
 
 import Control.Monad (forM_)
 import Data.List (zip)
+import GHC.TypeLits
 
-exportRust :: (MonadIO io, Golden method)
-           => Proxy method
-           -> FilePath
-           -> Metadata
-           -> [Dict]
-           -> io ()
-exportRust p file meta dics = liftIO $ withFile mdfile WriteMode $ \h ->
-    runConduit $ runExport .| toBytes UTF8 .| sinkHandle h
+summary :: Golden method
+        => Proxy method
+        -> Conduit a String GoldenT ()
+summary p = do
+    meta <- lift getMetadata
+    yield $ "/// # GoldenTests: " <> path <> "\n///\n"
+    yield $ "/// " <> (metaDescription meta <> "\n")
+    yield "///\n"
+    yield "/// ## Input(s)\n///\n"
+    yield "/// ```\n"
+    yields $ for inputs $ \(Description key enc _ ty _) ->
+         "/// " <> key <> " (" <> ty <> ") = " <> show enc <> "\n"
+    yield "/// ```\n"
+    yield "///\n"
+    yield "/// ## Output(s)\n///\n"
+    yield "/// ```\n"
+    yields $ for outputs $ \(Description key enc _ ty _) ->
+         "/// " <> key <> " (" <> ty <> ") = " <> show enc <> "\n"
+    yield "/// ```\n"
+    yield "struct TestVector {\n  "
+    yields $ intersperse ",\n  " $ for inputs $ \(Description key _ _ ty _) ->
+         key <> " : " <> ty
+    yield ",\n  "
+    yields $ intersperse ",\n  " $ for outputs $ \(Description key enc _ ty _) ->
+         key <> " : " <> ty
+    yield "\n}\n\n"
   where
-    mdfile = fromString (filePathToLString file <> ".rs")
-    Export inputs outputs = describe p
+    path = filePathToString $ unsafeFilePath Relative (getPath p)
+    Export inputs outputs = describe p Rust
 
-    runExport :: Conduit () String IO ()
-    runExport = do
-        exportDescription
-        exportDics dics
+pop :: (Monad m, Golden method) => Proxy method -> Conduit (Word, Dict) String m ()
+pop p = awaitForever $ \(idx, dic) -> do
+    let is = findKeyVal dic inputs
+    let os = findKeyVal dic outputs
+    yield $ if idx == 1 then "  [ TestVector { " else "  , TestVector { "
+    yields $ intersperse "\n    , " $ for is $ \(k,v) -> k <> " : " <> v
+    yield "\n    , "
+    yields $ intersperse "\n    , " $ for os $ \(k,v) -> k <> " : " <> v
+    yield "\n    }\n"
+  where
+    Export inputs outputs = describe p Rust
 
-    for :: [a] -> (a -> b) -> [b]
-    for = flip fmap
-
-    exportDescription :: Conduit () String IO ()
-    exportDescription = do
-        yield "# Summary\n\n"
-        yield (metaDescription meta <> "\n")
-        yield "\n"
-        yield "## Input(s)\n\n"
-        yield "```\n"
-        yields $ for inputs $ \(Description key enc ty mcomm) ->
-            let comm = maybe "" (" # " <>) mcomm
-             in key <> " (" <> show ty <> ") = " <> enc <> comm <> "\n"
-        yield "```\n"
-        yield "\n"
-        yield "## Output(s)\n\n"
-        yield "```\n"
-        yields $ for outputs $ \(Description key enc ty mcomm) ->
-            let comm = maybe "" (" # " <>) mcomm
-             in key <> " (" <> show ty <> ") = " <> enc <> comm <> "\n"
-        yield "```\n"
-        yield "\n"
-    exportDics dics = do
-        yield "# Test vectors\n\n"
-        forM_ (zip [1..] dics) $ \(idx, dic) -> do
-            let is = findKeyVal dic inputs
-            let os = findKeyVal dic outputs
-
-            yield $ "# Test vector " <> show idx <> "\n\n"
-            yield "```\n"
-            yields $ for is $ \(k,v) -> k <> " = " <> v <> "\n"
-            yield "\n"
-            yields $ for os $ \(k,v) -> k <> " = " <> v <> "\n"
-            yield "```\n"
-            yield "\n"
+for :: [a] -> (a -> b) -> [b]
+for = flip fmap
 
 findKeyVal :: Dict -> [Description] -> [(String, String)]
 findKeyVal _ [] = []
-findKeyVal d (Description k _ _ _:xs) = case lookup k d of
+findKeyVal d (Description k _ _ _ _:xs) = case lookup k d of
     Nothing -> error $ "missing input: " <> k
     Just v  -> (k, v) : findKeyVal d xs

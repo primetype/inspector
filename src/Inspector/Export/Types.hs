@@ -2,6 +2,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE UndecidableInstances #-}
 module Inspector.Export.Types
     ( Export (..)
     , Description(..)
@@ -16,21 +17,26 @@ import Foundation
 import Foundation.Monad
 import Foundation.Parser
 import qualified Foundation.Parser as Parser
-import Foundation.String (replace)
+import Foundation.String (replace, fromBytes, Encoding(ASCII7))
 import Foundation.String.Builder
 import qualified Basement.Block.Builder as B
 import Foundation.Primitive
 import Foundation.String.Read
 
 import Basement.Block (Block)
+import Basement.Nat
 import Data.ByteArray (Bytes, convert)
 import Data.ByteArray.Encoding
 
-import Crypto.Hash (Digest, digestFromByteString, HashAlgorithm)
+import Crypto.Hash (Digest, digestFromByteString)
+import Crypto.Hash.IO (HashAlgorithm(..))
 import Crypto.MAC.HMAC (HMAC(..))
 
 import Data.Typeable
 import GHC.ST (runST)
+
+import qualified Numeric as Help
+import qualified GHC.Real as Help
 
 builderToString :: Builder -> String
 builderToString a = runST (runUnsafe a)
@@ -104,25 +110,29 @@ instance Inspectable Word8 where
     exportType _ Rust       = emit "u8"
     exportType _ _          = emit "Word8"
     parser _ = fromIntegral <$> (parseIntegral :: Parser String Word16)
-    display _ = emit . show
+    display Rust = emit . hex 2 '0'
+    display _    = emit . show
 instance Inspectable Word16 where
     documentation _ = "16 bits unsigned integer."
     exportType _ Rust       = emit "u16"
     exportType _ _          = emit "Word16"
     parser _ = parseIntegral
-    display _ = emit . show
+    display Rust = emit . hex 4 '0'
+    display _    = emit . show
 instance Inspectable Word32 where
     documentation _ = "32 bits unsigned integer."
     exportType _ Rust       = emit "u32"
     exportType _ _          = emit "Word32"
     parser _ = parseIntegral
-    display _ = emit . show
+    display Rust = emit . hex 8 '0'
+    display _    = emit . show
 instance Inspectable Word64 where
     documentation _ = "64 bits unsigned integer."
     exportType _ Rust       = emit "u64"
     exportType _ _          = emit "Word64"
     parser _ = parseIntegral
-    display _ = emit . show
+    display Rust = emit . hex 16 '0'
+    display _    = emit . show
 instance Inspectable Word where
     documentation _ = "unsigned integer."
     exportType _ Rust       = emit "u64"
@@ -141,7 +151,8 @@ instance Inspectable Double where
     display _ = emit . show
 instance Inspectable String where
     documentation _ = "Bouble quoted, encoded string."
-    exportType _ _ = emit "String"
+    exportType _ Rust = emit "&'static str"
+    exportType _ _    = emit "String"
     parser _ = element '"' *> quotedParser <* element '"'
       where
         quotedParser = do
@@ -153,7 +164,8 @@ instance Inspectable String where
     display _ s = emitChar '"' <> emit (replace "\"" "\\\"" s) <> emitChar '"'
 instance Inspectable (Block Word8) where
     documentation _ = "hexadecimal encoded bytes"
-    exportType _ = exportType (Proxy @String)
+    exportType _ Rust = exportType (Proxy @[Word8]) Rust
+    exportType _ t    = exportType (Proxy @String) t
     parser _ = do
         hex <- (element '"' *> Parser.takeWhile isHexa <* element '"') <?> (Satisfy $ Just "hexadecimal characters")
         case convertFromBase Base16 hex of
@@ -161,10 +173,12 @@ instance Inspectable (Block Word8) where
             Right v  -> pure v
       where
         isHexa = flip elem ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f']
-    display t = display t . builderToString . unsafeStringBuilder . B.emit . (convertToBase Base16 :: Block Word8 -> Block Word8)
+    display Rust = display Rust . toList
+    display t    = display t . builderToString . unsafeStringBuilder . B.emit . (convertToBase Base16 :: Block Word8 -> Block Word8)
 instance Inspectable a => Inspectable [a] where
     documentation _ = "collection of " <> documentation (Proxy @a)
-    exportType p t = emitChar '[' <> exportType p t <> emitChar ']'
+    exportType p Rust = emit "[" <> exportType (Proxy @a) Rust <> emitChar ']'
+    exportType p t    = emitChar '[' <> exportType (Proxy @a) t <> emitChar ']'
     parser _ = do
         element '['
         l <- go <|> pure []
@@ -179,9 +193,12 @@ instance Inspectable a => Inspectable [a] where
     display t l =  emitChar '['
                 <> intercalate (emit ", ") (display t <$> l)
                 <> emitChar ']'
-instance HashAlgorithm hash => Inspectable (Digest hash) where
+instance (HashAlgorithm hash, KnownNat (HashDigestSize hash)) => Inspectable (Digest hash) where
     documentation _ = "hexadecimal encoded bytes"
-    exportType _ = exportType (Proxy @String)
+    exportType p Rust = emit "[" <> exportType (Proxy @Word8) Rust <> emit ";" <> emit mkSize <> emitChar ']'
+      where
+        mkSize = show $ natVal $ Proxy @(HashDigestSize hash)
+    exportType _ t    = exportType (Proxy @(Block Word8)) t
     parser _ = do
         b <- parser (Proxy @(Block Word8))
         case digestFromByteString b of
@@ -190,12 +207,12 @@ instance HashAlgorithm hash => Inspectable (Digest hash) where
     display t = display t . (convert :: Digest hash -> Block Word8)
 instance Inspectable Bytes where
     documentation _ = "hexadecimal encoded bytes"
-    exportType _ = exportType (Proxy @String)
+    exportType _ = exportType (Proxy @(Block Word8))
     parser _ = convert <$> parser (Proxy @(Block Word8))
     display t = display t . (convert :: Bytes -> Block Word8)
-instance HashAlgorithm hash => Inspectable (HMAC hash) where
+instance (HashAlgorithm hash, KnownNat (HashDigestSize hash)) => Inspectable (HMAC hash) where
     documentation _ = "hexadecimal encoded bytes"
-    exportType _ = exportType (Proxy @String)
+    exportType _ = exportType (Proxy @(Block Word8))
     parser _ = HMAC <$> parser Proxy
     display t = display t . (convert :: HMAC hash -> Block Word8)
 
@@ -215,9 +232,19 @@ data Description = Description
     { descriptionKey      :: !String
     , descriptionEncoding :: !String
     , descriptionType     :: !TypeRep
+    , descriptionTargetType :: !String
     , descriptionComment  :: !(Maybe String)
     }
   deriving (Show, Typeable)
+
+hex :: (Help.Integral a, Show a) => Int -> Char -> a -> String
+hex w c v =
+    let str = fromList $ Help.showHex v ""
+     in "0x" <> pad str <> str
+  where
+    go [] = []
+    go [c] = []
+    pad b = fromList $ replicate (toCount (w - fromCount (length b))) c
 
 input :: Description -> Export
 input i = Export [i] mempty

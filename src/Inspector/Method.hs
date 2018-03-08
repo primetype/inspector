@@ -121,7 +121,7 @@ class HasMethod method where
            -> Dict
            -> GoldenMT c m b
 
-    describe :: Proxy method -> Export
+    describe :: Proxy method -> OutputType -> Export
 
 instance (KnownSymbol path, HasMethod sub) => HasMethod (path :> sub) where
     type Method (path :> sub) = Method sub
@@ -136,7 +136,7 @@ instance (KnownSymbol path, KnownNat n, HasMethod sub) => HasMethod (PathParamet
 instance (KnownSymbol key, HasMethod sub, Value value, Arbitrary value) => HasMethod (Payload key value :> sub) where
     type Method (Payload key value :> sub) = value -> Method sub
 
-    describe _ = input (mkDesc (Proxy @key) (Proxy @value)) <> describe (Proxy @sub)
+    describe _ t = input (mkDesc t (Proxy @key) (Proxy @value)) <> describe (Proxy @sub) t
     method _ action f dict = do
         mvalue <- retrieve @key @value Proxy dict
         value <- case mvalue of
@@ -145,12 +145,13 @@ instance (KnownSymbol key, HasMethod sub, Value value, Arbitrary value) => HasMe
         f (Proxy @key) value
         method (Proxy @sub) (action value) f dict
 
-mkDesc :: forall key value . (KnownSymbol key, Value value) => Proxy key -> Proxy value -> Description
-mkDesc pkey pval = Description
+mkDesc :: forall key value . (KnownSymbol key, Value value) => OutputType -> Proxy key -> Proxy value -> Description
+mkDesc t pkey pval = Description
     { descriptionKey = fromList $ symbolVal (Proxy @key)
     , descriptionEncoding = documentation (Proxy @value)
     , descriptionType = typeRep (Proxy @value)
-    , descriptionComment = Just $ builderToString $ exportType (Proxy @value) TestVector
+    , descriptionTargetType = builderToString $ exportType (Proxy @value) t
+    , descriptionComment = Just $ builderToString $ exportType (Proxy @value) t
     }
 
 instance (KnownSymbol key, Value value) => HasMethod (Payload key value) where
@@ -160,7 +161,7 @@ instance (KnownSymbol key, Value value) => HasMethod (Payload key value) where
         void $ retrieve @key @value Proxy dict
         f (Proxy @key) action
         -- store (Proxy @key) action
-    describe _ = output (mkDesc (Proxy @key) (Proxy @value))
+    describe _ t = output (mkDesc t (Proxy @key) (Proxy @value))
 
 instance ( KnownSymbol k1, Value v1
          , KnownSymbol k2, Value v2
@@ -179,8 +180,8 @@ instance ( KnownSymbol k1, Value v1
         let (v1, v2) = action
         f (Proxy @k1) v1
         f (Proxy @k2) v2
-    describe _ = output (mkDesc (Proxy @k1) (Proxy @v1))
-              <> output (mkDesc (Proxy @k2) (Proxy @v2))
+    describe _ t = output (mkDesc t (Proxy @k1) (Proxy @v1))
+                <> output (mkDesc t (Proxy @k2) (Proxy @v2))
 
 instance ( KnownSymbol k1, Value v1
          , KnownSymbol k2, Value v2
@@ -204,9 +205,9 @@ instance ( KnownSymbol k1, Value v1
         f (Proxy @k1) v1
         f (Proxy @k2) v2
         f (Proxy @k3) v3
-    describe _ = output (mkDesc (Proxy @k1) (Proxy @v1))
-              <> output (mkDesc (Proxy @k2) (Proxy @v2))
-              <> output (mkDesc (Proxy @k3) (Proxy @v3))
+    describe _ t = output (mkDesc t (Proxy @k1) (Proxy @v1))
+                <> output (mkDesc t (Proxy @k2) (Proxy @v2))
+                <> output (mkDesc t (Proxy @k3) (Proxy @v3))
 
 instance ( KnownSymbol k1, Value v1
          , KnownSymbol k2, Value v2
@@ -235,10 +236,10 @@ instance ( KnownSymbol k1, Value v1
         f (Proxy @k2) v2
         f (Proxy @k3) v3
         f (Proxy @k4) v4
-    describe _ = output (mkDesc (Proxy @k1) (Proxy @v1))
-              <> output (mkDesc (Proxy @k2) (Proxy @v2))
-              <> output (mkDesc (Proxy @k3) (Proxy @v3))
-              <> output (mkDesc (Proxy @k4) (Proxy @v4))
+    describe _ t = output (mkDesc t (Proxy @k1) (Proxy @v1))
+                <> output (mkDesc t (Proxy @k2) (Proxy @v2))
+                <> output (mkDesc t (Proxy @k3) (Proxy @v3))
+                <> output (mkDesc t (Proxy @k4) (Proxy @v4))
 instance ( KnownSymbol k1, Value v1
          , KnownSymbol k2, Value v2
          , KnownSymbol k3, Value v3
@@ -271,11 +272,11 @@ instance ( KnownSymbol k1, Value v1
         f (Proxy @k3) v3
         f (Proxy @k4) v4
         f (Proxy @k5) v5
-    describe _ = output (mkDesc (Proxy @k1) (Proxy @v1))
-              <> output (mkDesc (Proxy @k2) (Proxy @v2))
-              <> output (mkDesc (Proxy @k3) (Proxy @v3))
-              <> output (mkDesc (Proxy @k4) (Proxy @v4))
-              <> output (mkDesc (Proxy @k5) (Proxy @v5))
+    describe _ t = output (mkDesc t (Proxy @k1) (Proxy @v1))
+                <> output (mkDesc t (Proxy @k2) (Proxy @v2))
+                <> output (mkDesc t (Proxy @k3) (Proxy @v3))
+                <> output (mkDesc t (Proxy @k4) (Proxy @v4))
+                <> output (mkDesc t (Proxy @k5) (Proxy @v5))
 instance ( KnownSymbol k1, Value v1
          , KnownSymbol k2, Value v2
          , KnownSymbol k3, Value v3
@@ -313,12 +314,12 @@ instance ( KnownSymbol k1, Value v1
         f (Proxy @k4) v4
         f (Proxy @k5) v5
         f (Proxy @k6) v6
-    describe _ = output (mkDesc (Proxy @k1) (Proxy @v1))
-              <> output (mkDesc (Proxy @k2) (Proxy @v2))
-              <> output (mkDesc (Proxy @k3) (Proxy @v3))
-              <> output (mkDesc (Proxy @k4) (Proxy @v4))
-              <> output (mkDesc (Proxy @k5) (Proxy @v5))
-              <> output (mkDesc (Proxy @k6) (Proxy @v6))
+    describe _ t = output (mkDesc t (Proxy @k1) (Proxy @v1))
+                <> output (mkDesc t (Proxy @k2) (Proxy @v2))
+                <> output (mkDesc t (Proxy @k3) (Proxy @v3))
+                <> output (mkDesc t (Proxy @k4) (Proxy @v4))
+                <> output (mkDesc t (Proxy @k5) (Proxy @v5))
+                <> output (mkDesc t (Proxy @k6) (Proxy @v6))
 
 -- helper method to retrieve a value from a dictionary
 retrieve :: forall key value c m

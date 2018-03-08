@@ -30,6 +30,7 @@ import Inspector.Method
 import Inspector.Export.Types
 
 import qualified Inspector.Export.Markdown as Markdown
+import qualified Inspector.Export.Rust as Rust
 
 import Foundation
 import Foundation.IO (stdout)
@@ -85,16 +86,21 @@ golden proxy action = do
     dics <- collectDics file
     -- 2. execute the method according to the plan
     let c = case mode of
-                GoldenTest -> traverseWith store proxy action
+                GoldenTest -> traverseWith (store TestVector) proxy action
                            .| diffC
                            .| (sinkList >>= (yield . Report path))
                            .| prettyC
-                Generate TestVector -> traverseWith store proxy action
+                Generate TestVector -> traverseWith (store TestVector) proxy action
                                     .| genC
                                     .| storeBackC
                 Generate Markdown -> do
                     Markdown.summary proxy
-                    traverseWith store proxy action .| genC .| Markdown.pop proxy
+                    traverseWith (store Markdown) proxy action .| genC .| Markdown.pop proxy
+                Generate Rust -> do
+                    Rust.summary proxy
+                    yield $  "const GoldenTests : [TestVector;"<> show (fromCount (length dics)) <>"] =\n"
+                    traverseWith (store Rust) proxy action .| genC .| Rust.pop proxy
+                    yield "  ];\n\n"
     runConduit $  yields dics .| c .| toBytes UTF8 .| sinkHandle stdout
   where
     path :: FilePath
