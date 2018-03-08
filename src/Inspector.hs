@@ -131,17 +131,3 @@ traverseWith :: forall method c . (Golden method, Monoid c)
 traverseWith f proxy action = awaitIndex $ \idx dict -> do
     c <- lift $ exec $ method proxy action f dict
     yield (idx, dict, c)
-
-{-
-    r <- zip3 [1..] dics <$> forM dics (exec . method proxy action)
-    case mode of
-        GoldenTest -> do
-            let rs = flip fmap r $ \(idx, org, new) ->
-                        let diffs = diff org new
-                         in if null diffs then Success else Failure idx diffs
-            pretty $ Report path rs
-        Generate TestVector -> storeBackDics file $ (\(_,_,d) -> d) <$> r
-        Generate t -> void $ do
-            st <- withState $ \st -> (st, st)
-            export t proxy file st $ (\(_,_,d) -> d) <$> r
--}

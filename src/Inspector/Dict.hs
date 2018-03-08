@@ -12,7 +12,6 @@ module Inspector.Dict
     , diff
 
     , collectDics
-    , storeBackDics
     , storeBackC
     ) where
 
@@ -24,7 +23,7 @@ import Foundation.Conduit
 import Foundation.Conduit.Textual
 import Foundation.IO
 import Foundation.VFS
-import Foundation.Collection hiding (takeWhile, skipWhile, zip)
+import Foundation.Collection hiding (takeWhile, skipWhile)
 import Data.ByteArray (Bytes)
 import Data.List (deleteFirstsBy, intersectBy, zip)
 
@@ -115,9 +114,6 @@ collectDics path = liftIO $ withFile path ReadMode $ \h -> runConduit $
         ignoreWhiteSpace :: Parser String ()
         ignoreWhiteSpace = skipWhile (`elem` [' ', '\t'])
 
-storeBackDics :: MonadIO io => FilePath -> [Dict] -> io ()
-storeBackDics path dics = liftIO $ withFile path WriteMode $ \h -> runConduit $
-    yields (zip [1..] dics) .| storeBackC .| toBytes UTF8 .| sinkHandle h
 storeBackC :: Monad m => Conduit (Word, Dict) String m ()
 storeBackC = awaitForever $ \(i, l) -> do
     yield $ "# Test Vector " <> show i <> "\n"
