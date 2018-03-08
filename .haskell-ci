@@ -4,9 +4,9 @@ compiler: ghc-8.4 ghc-8.4-alpha2
 
 # options
 
-# builds 
-build: ghc-8.2
-build: ghc-8.4
+# builds
+build: ghc-8.2 extradep=basement-0.0.7 extradep=foundation-0.0.20 extradep=memory-0.14.15
+build: ghc-8.4 extradep=basement-0.0.7 extradep=foundation-0.0.20 extradep=memory-0.14.15
 
 # packages
 package: '.'

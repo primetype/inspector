@@ -20,6 +20,7 @@ module Inspector.Monad
     , Metadata(..)
 
     , summary
+    , getMetadata
     , Builder
     ) where
 
@@ -32,12 +33,9 @@ import Foundation.String.Builder
 
 import GHC.TypeLits
 
-import Inspector.Display
 import Inspector.Dict
 import Inspector.Report
-
-data OutputType = TestVector | Markdown | Rust | C | JS | Haskell
-  deriving (Show, Eq, Ord, Enum, Bounded, Typeable)
+import Inspector.Export.Types
 
 data Mode = Generate !OutputType
           | GoldenTest
@@ -89,11 +87,14 @@ type GoldenT = GoldenMT Metadata IO
 summary :: String -> GoldenT ()
 summary builder = withState $ \st -> ((), st { metaDescription = builder })
 
+getMetadata :: GoldenT Metadata
+getMetadata = withState $ \st -> (st, st)
+
 -- | Monad for a running golden test
 --
 type GoldenM = GoldenMT Dict IO
 
-store :: (KnownSymbol key, Display value)
+store :: (KnownSymbol key, Inspectable value)
       => Proxy (key :: Symbol) -> value -> GoldenM ()
 store pk val = withState $ \dict ->
-    ((), add pk (display val) dict )
+    ((), add pk (builderToString $ display TestVector val) dict )

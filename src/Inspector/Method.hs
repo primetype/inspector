@@ -5,6 +5,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE PolyKinds #-}
+{-# LANGUAGE Rank2Types #-}
 
 module Inspector.Method
     ( (:>)
@@ -29,20 +30,19 @@ import Crypto.Hash (Digest, SHA256, hash)
 import Crypto.MAC.HMAC (HMAC, hmac)
 import Data.ByteArray (ByteArray, Bytes)
 import Data.ByteArray.Encoding
+import Foundation.Parser (ParseError(..), parseOnly)
 
 import Control.Monad (when, void, forM, forM_)
 import GHC.TypeLits
 import Data.Typeable
 
 import Inspector.Dict
-import Inspector.Parser
-import Inspector.Display
 import Inspector.Monad
 import Inspector.Report
 import Inspector.Export.Types
 
 -- | Alias Constraint Type for Value type
-type Value value = (HasParser value, Typeable value, Display value)
+type Value value = (Inspectable value, Typeable value)
 
 -- | Alias Constraint type for golden test
 type Golden golden = (HasMethod golden, HasPath golden)
@@ -114,7 +114,12 @@ instance {-# OVERLAPPING #-} (KnownNat n, KnownSymbol path) => HasPath (PathPara
 class HasMethod method where
     type Method method
 
-    method :: Proxy method -> Method method -> Dict -> GoldenM ()
+    method :: forall c b m . Monad m
+           => Proxy method
+           -> Method method
+           -> (forall a k . (Value a, KnownSymbol k) => Proxy k -> a -> GoldenMT c m b)
+           -> Dict
+           -> GoldenMT c m b
 
     describe :: Proxy method -> Export
 
@@ -132,28 +137,29 @@ instance (KnownSymbol key, HasMethod sub, Value value, Arbitrary value) => HasMe
     type Method (Payload key value :> sub) = value -> Method sub
 
     describe _ = input (mkDesc (Proxy @key) (Proxy @value)) <> describe (Proxy @sub)
-    method _ action dict = do
+    method _ action f dict = do
         mvalue <- retrieve @key @value Proxy dict
         value <- case mvalue of
             Nothing -> error $ "missing key: " <> fromString (symbolVal (Proxy @key))
             Just value -> pure value
-        store (Proxy @key) value
-        method (Proxy @sub) (action value) dict
+        f (Proxy @key) value
+        method (Proxy @sub) (action value) f dict
 
 mkDesc :: forall key value . (KnownSymbol key, Value value) => Proxy key -> Proxy value -> Description
 mkDesc pkey pval = Description
     { descriptionKey = fromList $ symbolVal (Proxy @key)
-    , descriptionEncoding = encoding (Proxy @value)
+    , descriptionEncoding = documentation (Proxy @value)
     , descriptionType = typeRep (Proxy @value)
-    , descriptionComment = comment (Proxy @value)
+    , descriptionComment = Just $ builderToString $ exportType (Proxy @value) TestVector
     }
 
 instance (KnownSymbol key, Value value) => HasMethod (Payload key value) where
     type Method (Payload key value) = value
 
-    method methProxy action dict = do
+    method methProxy action f dict = do
         void $ retrieve @key @value Proxy dict
-        store (Proxy @key) action
+        f (Proxy @key) action
+        -- store (Proxy @key) action
     describe _ = output (mkDesc (Proxy @key) (Proxy @value))
 
 instance ( KnownSymbol k1, Value v1
@@ -167,12 +173,12 @@ instance ( KnownSymbol k1, Value v1
                 , Payload k2 v2
                 ) = (v1, v2)
 
-    method methProxy action dict = do
+    method methProxy action f dict = do
         void $ retrieve @k1 @v1 Proxy dict
         void $ retrieve @k2 @v2 Proxy dict
         let (v1, v2) = action
-        store (Proxy @k1) v1
-        store (Proxy @k2) v2
+        f (Proxy @k1) v1
+        f (Proxy @k2) v2
     describe _ = output (mkDesc (Proxy @k1) (Proxy @v1))
               <> output (mkDesc (Proxy @k2) (Proxy @v2))
 
@@ -190,14 +196,14 @@ instance ( KnownSymbol k1, Value v1
                 , Payload k3 v3
                 ) = (v1, v2, v3)
 
-    method methProxy action dict = do
+    method methProxy action f dict = do
         void $ retrieve @k1 @v1 Proxy dict
         void $ retrieve @k2 @v2 Proxy dict
         void $ retrieve @k3 @v3 Proxy dict
         let (v1, v2, v3) = action
-        store (Proxy @k1) v1
-        store (Proxy @k2) v2
-        store (Proxy @k3) v3
+        f (Proxy @k1) v1
+        f (Proxy @k2) v2
+        f (Proxy @k3) v3
     describe _ = output (mkDesc (Proxy @k1) (Proxy @v1))
               <> output (mkDesc (Proxy @k2) (Proxy @v2))
               <> output (mkDesc (Proxy @k3) (Proxy @v3))
@@ -219,16 +225,16 @@ instance ( KnownSymbol k1, Value v1
                 , Payload k4 v4
                 ) = (v1, v2, v3, v4)
 
-    method methProxy action dict = do
+    method methProxy action f dict = do
         void $ retrieve @k1 @v1 Proxy dict
         void $ retrieve @k2 @v2 Proxy dict
         void $ retrieve @k3 @v3 Proxy dict
         void $ retrieve @k4 @v4 Proxy dict
         let (v1, v2, v3, v4) = action
-        store (Proxy @k1) v1
-        store (Proxy @k2) v2
-        store (Proxy @k3) v3
-        store (Proxy @k4) v4
+        f (Proxy @k1) v1
+        f (Proxy @k2) v2
+        f (Proxy @k3) v3
+        f (Proxy @k4) v4
     describe _ = output (mkDesc (Proxy @k1) (Proxy @v1))
               <> output (mkDesc (Proxy @k2) (Proxy @v2))
               <> output (mkDesc (Proxy @k3) (Proxy @v3))
@@ -253,18 +259,18 @@ instance ( KnownSymbol k1, Value v1
                 , Payload k5 v5
                 ) = (v1, v2, v3, v4, v5)
 
-    method methProxy action dict = do
+    method methProxy action f dict = do
         void $ retrieve @k1 @v1 Proxy dict
         void $ retrieve @k2 @v2 Proxy dict
         void $ retrieve @k3 @v3 Proxy dict
         void $ retrieve @k4 @v4 Proxy dict
         void $ retrieve @k5 @v5 Proxy dict
         let (v1, v2, v3, v4, v5) = action
-        store (Proxy @k1) v1
-        store (Proxy @k2) v2
-        store (Proxy @k3) v3
-        store (Proxy @k4) v4
-        store (Proxy @k5) v5
+        f (Proxy @k1) v1
+        f (Proxy @k2) v2
+        f (Proxy @k3) v3
+        f (Proxy @k4) v4
+        f (Proxy @k5) v5
     describe _ = output (mkDesc (Proxy @k1) (Proxy @v1))
               <> output (mkDesc (Proxy @k2) (Proxy @v2))
               <> output (mkDesc (Proxy @k3) (Proxy @v3))
@@ -293,7 +299,7 @@ instance ( KnownSymbol k1, Value v1
                 , Payload k6 v6
                 ) = (v1, v2, v3, v4, v5, v6)
 
-    method methProxy action dict = do
+    method methProxy action f dict = do
         void $ retrieve @k1 @v1 Proxy dict
         void $ retrieve @k2 @v2 Proxy dict
         void $ retrieve @k3 @v3 Proxy dict
@@ -301,12 +307,12 @@ instance ( KnownSymbol k1, Value v1
         void $ retrieve @k5 @v5 Proxy dict
         void $ retrieve @k6 @v6 Proxy dict
         let (v1, v2, v3, v4, v5, v6) = action
-        store (Proxy @k1) v1
-        store (Proxy @k2) v2
-        store (Proxy @k3) v3
-        store (Proxy @k4) v4
-        store (Proxy @k5) v5
-        store (Proxy @k6) v6
+        f (Proxy @k1) v1
+        f (Proxy @k2) v2
+        f (Proxy @k3) v3
+        f (Proxy @k4) v4
+        f (Proxy @k5) v5
+        f (Proxy @k6) v6
     describe _ = output (mkDesc (Proxy @k1) (Proxy @v1))
               <> output (mkDesc (Proxy @k2) (Proxy @v2))
               <> output (mkDesc (Proxy @k3) (Proxy @v3))
@@ -315,16 +321,17 @@ instance ( KnownSymbol k1, Value v1
               <> output (mkDesc (Proxy @k6) (Proxy @v6))
 
 -- helper method to retrieve a value from a dictionary
-retrieve :: forall key value
+retrieve :: forall key value c m
           . ( Value value
+            , Monad m
             , KnownSymbol key
             )
          => Proxy (key :: Symbol)
          -> Dict
-         -> GoldenM (Maybe value)
+         -> GoldenMT c m (Maybe value)
 retrieve pk dict = case query (Proxy @key) dict of
     Nothing -> pure Nothing
-    Just st -> case parseOnly getParser st of
+    Just st -> case parseOnly (parser (Proxy @value)) st of
         Left (Expected w g) -> error $ show ("parse (" <> r <> " :: " <> t <> ")", st, "Expected: " <> w <> "; But received: " <> g)
         Left (ExpectedElement w g) -> error $ show ("parse (" <> r <> " :: " <> t <> ")", st, "Expected: " <> show w <> "; But received: " <> show g)
         Left err            -> error $ show ("parse (" <> r <> " :: " <> t <> ")", st, err)

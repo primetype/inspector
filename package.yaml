@@ -12,9 +12,9 @@ extra-source-files:
 
 dependencies:
   - base
-  - basement
-  - foundation
-  - memory
+  - basement >= 0.0.7
+  - foundation >= 0.0.20
+  - memory >= 0.14.15
   - cryptonite
 
 default-extensions:
@@ -27,15 +27,13 @@ library:
   source-dirs: src
   exposed-modules:
     - Inspector
-    - Inspector.Parser
-    - Inspector.Display
   other-modules:
     - Inspector.Method
     - Inspector.Dict
     - Inspector.Monad
     - Inspector.Report
-    - Inspector.Export
     - Inspector.Export.Markdown
+    - Inspector.Export.Rust
     - Inspector.Export.Types
 
 executables:

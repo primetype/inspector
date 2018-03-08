@@ -13,6 +13,7 @@ module Inspector.Dict
 
     , collectDics
     , storeBackDics
+    , storeBackC
     ) where
 
 import Foundation hiding (takeWhile, skipWhile)
@@ -28,8 +29,6 @@ import Data.ByteArray (Bytes)
 import Data.List (deleteFirstsBy, intersectBy, zip)
 
 import GHC.TypeLits
-
-import Inspector.Display
 
 newtype Dict = Dict { dictToList :: [(String, String)] }
   deriving (Show, Eq, Ord, Typeable, Semigroup, Monoid, Collection, Sequential, IndexedCollection, Foldable)
@@ -118,13 +117,13 @@ collectDics path = liftIO $ withFile path ReadMode $ \h -> runConduit $
 
 storeBackDics :: MonadIO io => FilePath -> [Dict] -> io ()
 storeBackDics path dics = liftIO $ withFile path WriteMode $ \h -> runConduit $
-    yields (zip [1..] dics) .| dic .| toBytes UTF8 .| sinkHandle h
+    yields (zip [1..] dics) .| storeBackC .| toBytes UTF8 .| sinkHandle h
+storeBackC :: Monad m => Conduit (Word, Dict) String m ()
+storeBackC = awaitForever $ \(i, l) -> do
+    yield $ "# Test Vector " <> show i <> "\n"
+    yield "TestVector\n"
+    forM_ (sortBy f $ toList l) $ \(k, v) ->
+      yield k >> yield " = " >> yield v >> yield "\n"
+    yield "\n"
   where
-    dic :: Monad m => Conduit (Word, Dict) String m ()
-    dic = awaitForever $ \(i, l) -> do
-        yield $ "# Test Vector " <> show i <> "\n"
-        yield "TestVector\n"
-        forM_ (sortBy f $ toList l) $ \(k, v) ->
-          yield k >> yield " = " >> yield v >> yield "\n"
-        yield "\n"
     f (x,_) (y,_) = compare x y

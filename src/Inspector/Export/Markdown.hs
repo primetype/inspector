@@ -1,7 +1,9 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE Rank2Types #-}
 
 module Inspector.Export.Markdown
-    ( exportMarkdown
+    ( pop
+    , summary
     ) where
 
 import Foundation
@@ -14,8 +16,7 @@ import Foundation.Conduit.Textual
 import Foundation.String (Encoding(UTF8))
 
 import Inspector.Dict
-import Inspector.Display
-import Inspector.Monad
+import Inspector.Monad hiding (summary)
 import Inspector.Report
 import Inspector.Method
 
@@ -23,59 +24,52 @@ import Inspector.Export.Types
 
 import Control.Monad (forM_)
 import Data.List (zip)
+import GHC.TypeLits
 
-exportMarkdown :: (MonadIO io, Golden method)
-               => Proxy method
-               -> FilePath
-               -> Metadata
-               -> [Dict]
-               -> io ()
-exportMarkdown p file meta dics = liftIO $ withFile mdfile WriteMode $ \h ->
-    runConduit $ runExport .| toBytes UTF8 .| sinkHandle h
+summary :: Golden method
+        => Proxy method
+        -> Conduit a String GoldenT ()
+summary p = do
+    meta <- lift getMetadata
+    yield $ "# " <> path <> "\n\n"
+    yield (metaDescription meta <> "\n")
+    yield "\n"
+    yield "## Input(s)\n\n"
+    yield "```\n"
+    yields $ for inputs $ \(Description key enc ty mcomm) ->
+        let comm = maybe "" (" # " <>) mcomm
+         in key <> " (" <> show ty <> ") = " <> show enc <> comm <> "\n"
+    yield "```\n"
+    yield "\n"
+    yield "## Output(s)\n\n"
+    yield "```\n"
+    yields $ for outputs $ \(Description key enc ty mcomm) ->
+        let comm = maybe "" (" # " <>) mcomm
+         in key <> " (" <> show ty <> ") = " <> show enc <> comm <> "\n"
+    yield "```\n"
+    yield "\n"
+    yield "# Test vectors\n\n"
   where
-    mdfile = fromString (filePathToLString file <> ".md")
+    path = filePathToString $ unsafeFilePath Relative (getPath p)
     Export inputs outputs = describe p
 
-    runExport :: Conduit () String IO ()
-    runExport = do
-        exportDescription
-        exportDics dics
 
-    for :: [a] -> (a -> b) -> [b]
-    for = flip fmap
+pop :: (Monad m, Golden method) => Proxy method -> Conduit (Word, Dict) String m ()
+pop p = awaitForever $ \(idx, dic) -> do
+    let is = findKeyVal dic inputs
+    let os = findKeyVal dic outputs
+    yield $ "## Test vector " <> show idx <> "\n\n"
+    yield "```\n"
+    yields $ for is $ \(k,v) -> k <> " = " <> v <> "\n"
+    yield "\n"
+    yields $ for os $ \(k,v) -> k <> " = " <> v <> "\n"
+    yield "```\n"
+    yield "\n"
+  where
+    Export inputs outputs = describe p
 
-    exportDescription :: Conduit () String IO ()
-    exportDescription = do
-        yield "# Summary\n\n"
-        yield (metaDescription meta <> "\n")
-        yield "\n"
-        yield "## Input(s)\n\n"
-        yield "```\n"
-        yields $ for inputs $ \(Description key enc ty mcomm) ->
-            let comm = maybe "" (" # " <>) mcomm
-             in key <> " (" <> show ty <> ") = " <> enc <> comm <> "\n"
-        yield "```\n"
-        yield "\n"
-        yield "## Output(s)\n\n"
-        yield "```\n"
-        yields $ for outputs $ \(Description key enc ty mcomm) ->
-            let comm = maybe "" (" # " <>) mcomm
-             in key <> " (" <> show ty <> ") = " <> enc <> comm <> "\n"
-        yield "```\n"
-        yield "\n"
-    exportDics dics = do
-        yield "# Test vectors\n\n"
-        forM_ (zip [1..] dics) $ \(idx, dic) -> do
-            let is = findKeyVal dic inputs
-            let os = findKeyVal dic outputs
-
-            yield $ "# Test vector " <> show idx <> "\n\n"
-            yield "```\n"
-            yields $ for is $ \(k,v) -> k <> " = " <> v <> "\n"
-            yield "\n"
-            yields $ for os $ \(k,v) -> k <> " = " <> v <> "\n"
-            yield "```\n"
-            yield "\n"
+for :: [a] -> (a -> b) -> [b]
+for = flip fmap
 
 findKeyVal :: Dict -> [Description] -> [(String, String)]
 findKeyVal _ [] = []

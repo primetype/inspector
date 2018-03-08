@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 37b39d4cfd3cc2d569e77385860cf8f45f6a2533bf1fde60d954cdb510e584a8
+-- hash: 7f5848e70e0a51547b1d1c344d0df8b1b3241a92330bed3c35da256136436f03
 
 name:           inspector
 version:        0.2
@@ -26,21 +26,19 @@ library
   default-extensions: NoImplicitPrelude TypeFamilies DataKinds OverloadedStrings
   build-depends:
       base
-    , basement
+    , basement >=0.0.7
     , cryptonite
-    , foundation
-    , memory
+    , foundation >=0.0.20
+    , memory >=0.14.15
   exposed-modules:
       Inspector
-      Inspector.Parser
-      Inspector.Display
   other-modules:
       Inspector.Method
       Inspector.Dict
       Inspector.Monad
       Inspector.Report
-      Inspector.Export
       Inspector.Export.Markdown
+      Inspector.Export.Rust
       Inspector.Export.Types
   default-language: Haskell2010
 
@@ -52,11 +50,11 @@ executable example
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       base
-    , basement
+    , basement >=0.0.7
     , cryptonite
-    , foundation
+    , foundation >=0.0.20
     , inspector
-    , memory
+    , memory >=0.14.15
   other-modules:
       Paths_inspector
   default-language: Haskell2010
