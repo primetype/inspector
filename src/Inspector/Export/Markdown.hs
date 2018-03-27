@@ -10,21 +10,22 @@ import Foundation
 import Foundation.Monad
 import Foundation.VFS
 import Foundation.VFS.FilePath
-import Foundation.IO
+
 import Foundation.Conduit
-import Foundation.Conduit.Textual
-import Foundation.String (Encoding(UTF8))
+
+
+import Foundation.Collection (Element)
 
 import Inspector.Dict
 import Inspector.Monad hiding (summary)
-import Inspector.Report
+
 import Inspector.Method
 
 import Inspector.Export.Types
 
-import Control.Monad (forM_)
-import Data.List (zip)
-import GHC.TypeLits
+
+
+
 
 summary :: Golden method
         => Proxy method
@@ -51,7 +52,7 @@ summary p = do
     yield "# Test vectors\n\n"
   where
     path = filePathToString $ unsafeFilePath Relative (getPath p)
-    Export inputs outputs = describe p Markdown
+    Export inputs outputs = describe p
 
 pop :: (Monad m, Golden method) => Proxy method -> Conduit (Word, Dict) String m ()
 pop p = awaitForever $ \(idx, dic) -> do
@@ -59,19 +60,38 @@ pop p = awaitForever $ \(idx, dic) -> do
     let os = findKeyVal dic outputs
     yield $ "## Test vector " <> show idx <> "\n\n"
     yield "```\n"
-    yields $ for is $ \(k,v) -> k <> " = " <> v <> "\n"
+    yields $ for is $ \(k,v) -> k <> " = " <> buildIntermediarType "" v <> "\n"
     yield "\n"
-    yields $ for os $ \(k,v) -> k <> " = " <> v <> "\n"
+    yields $ for os $ \(k,v) -> k <> " = " <> buildIntermediarType "" v <> "\n"
     yield "```\n"
     yield "\n"
   where
-    Export inputs outputs = describe p Markdown
+    Export inputs outputs = describe p
 
 for :: [a] -> (a -> b) -> [b]
 for = flip fmap
 
-findKeyVal :: Dict -> [Description] -> [(String, String)]
+findKeyVal :: Dict -> [Description] -> [Element Dict]
 findKeyVal _ [] = []
 findKeyVal d (Description k _ _ _ _:xs) = case lookup k d of
     Nothing -> error $ "missing input: " <> k
     Just v  -> (k, v) : findKeyVal d xs
+
+buildIntermediarType :: String -> IntermediarType -> String
+buildIntermediarType alignment it = case it of
+    ITBoolean    b   -> if b then "true" else "false"
+    ITInteger    i   -> show i
+    ITDouble     d   -> show d
+    ITString     str -> show str
+    ITCollection [] -> "[]"
+    ITCollection [x] -> "[ " <> buildIntermediarType alignment x <> " ]"
+    ITCollection xs  -> "[ "
+                     <> intercalate ("\n"<> alignment <> ", ")
+                                    (buildIntermediarType (alignment <> "  ") <$> xs)
+                     <> "\n" <> alignment <> "]"
+    ITStructure  [] -> "{}"
+    ITStructure  [(n,v)] -> "{ " <> n <> " : " <> buildIntermediarType (alignment <> replicate (length n) ' ' <> "     ") v <> " }"
+    ITStructure  str -> "{ "
+                     <> intercalate ("\n"<> alignment <> ", ")
+                                    ((\(n, v) -> n <> " : " <> buildIntermediarType (alignment <> replicate (length n) ' ' <> "     ") v) <$> str)
+                     <> "\n" <> alignment <> "}"

@@ -34,7 +34,6 @@ import Foundation.String.Builder
 import GHC.TypeLits
 
 import Inspector.Dict
-import Inspector.Report
 import Inspector.Export.Types
 
 data Mode = Generate !OutputType
@@ -85,7 +84,7 @@ newtype Metadata = Metadata
 type GoldenT = GoldenMT Metadata IO
 
 summary :: String -> GoldenT ()
-summary builder = withState $ \st -> ((), st { metaDescription = builder })
+summary b = withState $ \st -> ((), st { metaDescription = b })
 
 getMetadata :: GoldenT Metadata
 getMetadata = withState $ \st -> (st, st)
@@ -95,6 +94,6 @@ getMetadata = withState $ \st -> (st, st)
 type GoldenM = GoldenMT Dict IO
 
 store :: (KnownSymbol key, Inspectable value)
-      => OutputType -> Proxy (key :: Symbol) -> value -> GoldenM ()
-store t pk val = withState $ \dict ->
-    ((), add pk (builderToString $ display t val) dict )
+      => Proxy (key :: Symbol) -> value -> GoldenM ()
+store pk val = withState $ \dict ->
+    ((), add pk (builder val) dict )

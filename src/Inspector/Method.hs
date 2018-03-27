@@ -24,21 +24,13 @@ module Inspector.Method
 import Foundation
 import Foundation.VFS.FilePath
 import Foundation.Check
-import Foundation.Monad
-import Foundation.Monad.Reader
-import Crypto.Hash (Digest, SHA256, hash)
-import Crypto.MAC.HMAC (HMAC, hmac)
-import Data.ByteArray (ByteArray, Bytes)
-import Data.ByteArray.Encoding
-import Foundation.Parser (ParseError(..), parseOnly)
 
-import Control.Monad (when, void, forM, forM_)
+import Control.Monad (void)
 import GHC.TypeLits
 import Data.Typeable
 
 import Inspector.Dict
 import Inspector.Monad
-import Inspector.Report
 import Inspector.Export.Types
 
 -- | Alias Constraint Type for Value type
@@ -121,7 +113,7 @@ class HasMethod method where
            -> Dict
            -> GoldenMT c m b
 
-    describe :: Proxy method -> OutputType -> Export
+    describe :: Proxy method -> Export
 
 instance (KnownSymbol path, HasMethod sub) => HasMethod (path :> sub) where
     type Method (path :> sub) = Method sub
@@ -136,32 +128,31 @@ instance (KnownSymbol path, KnownNat n, HasMethod sub) => HasMethod (PathParamet
 instance (KnownSymbol key, HasMethod sub, Value value, Arbitrary value) => HasMethod (Payload key value :> sub) where
     type Method (Payload key value :> sub) = value -> Method sub
 
-    describe _ t = input (mkDesc t (Proxy @key) (Proxy @value)) <> describe (Proxy @sub) t
+    describe _ = input (mkDesc (Proxy @key) (Proxy @value)) <> describe (Proxy @sub)
     method _ action f dict = do
         mvalue <- retrieve @key @value Proxy dict
         value <- case mvalue of
             Nothing -> error $ "missing key: " <> fromString (symbolVal (Proxy @key))
             Just value -> pure value
-        f (Proxy @key) value
+        void $ f (Proxy @key) value
         method (Proxy @sub) (action value) f dict
 
-mkDesc :: forall key value . (KnownSymbol key, Value value) => OutputType -> Proxy key -> Proxy value -> Description
-mkDesc t pkey pval = Description
-    { descriptionKey = fromList $ symbolVal (Proxy @key)
-    , descriptionEncoding = documentation (Proxy @value)
-    , descriptionType = typeRep (Proxy @value)
-    , descriptionTargetType = builderToString $ exportType (Proxy @value) t
-    , descriptionComment = Just $ builderToString $ exportType (Proxy @value) t
+mkDesc :: forall key value . (KnownSymbol key, Value value) => Proxy key -> Proxy value -> Description
+mkDesc pkey pval = Description
+    { descriptionKey = fromList $ symbolVal pkey
+    , descriptionEncoding = documentation pval
+    , descriptionType = typeRep pval
+    , descriptionTargetType = exportType pval
+    , descriptionComment = Just $ show $ exportType pval
     }
 
 instance (KnownSymbol key, Value value) => HasMethod (Payload key value) where
     type Method (Payload key value) = value
 
-    method methProxy action f dict = do
+    method _ action f dict = do
         void $ retrieve @key @value Proxy dict
         f (Proxy @key) action
-        -- store (Proxy @key) action
-    describe _ t = output (mkDesc t (Proxy @key) (Proxy @value))
+    describe _ = output (mkDesc (Proxy @key) (Proxy @value))
 
 instance ( KnownSymbol k1, Value v1
          , KnownSymbol k2, Value v2
@@ -174,14 +165,14 @@ instance ( KnownSymbol k1, Value v1
                 , Payload k2 v2
                 ) = (v1, v2)
 
-    method methProxy action f dict = do
+    method _ action f dict = do
         void $ retrieve @k1 @v1 Proxy dict
         void $ retrieve @k2 @v2 Proxy dict
         let (v1, v2) = action
-        f (Proxy @k1) v1
+        void $ f (Proxy @k1) v1
         f (Proxy @k2) v2
-    describe _ t = output (mkDesc t (Proxy @k1) (Proxy @v1))
-                <> output (mkDesc t (Proxy @k2) (Proxy @v2))
+    describe _ = output (mkDesc (Proxy @k1) (Proxy @v1))
+              <> output (mkDesc (Proxy @k2) (Proxy @v2))
 
 instance ( KnownSymbol k1, Value v1
          , KnownSymbol k2, Value v2
@@ -197,17 +188,17 @@ instance ( KnownSymbol k1, Value v1
                 , Payload k3 v3
                 ) = (v1, v2, v3)
 
-    method methProxy action f dict = do
+    method _ action f dict = do
         void $ retrieve @k1 @v1 Proxy dict
         void $ retrieve @k2 @v2 Proxy dict
         void $ retrieve @k3 @v3 Proxy dict
         let (v1, v2, v3) = action
-        f (Proxy @k1) v1
-        f (Proxy @k2) v2
+        void $ f (Proxy @k1) v1
+        void $ f (Proxy @k2) v2
         f (Proxy @k3) v3
-    describe _ t = output (mkDesc t (Proxy @k1) (Proxy @v1))
-                <> output (mkDesc t (Proxy @k2) (Proxy @v2))
-                <> output (mkDesc t (Proxy @k3) (Proxy @v3))
+    describe _ = output (mkDesc (Proxy @k1) (Proxy @v1))
+              <> output (mkDesc (Proxy @k2) (Proxy @v2))
+              <> output (mkDesc (Proxy @k3) (Proxy @v3))
 
 instance ( KnownSymbol k1, Value v1
          , KnownSymbol k2, Value v2
@@ -226,20 +217,20 @@ instance ( KnownSymbol k1, Value v1
                 , Payload k4 v4
                 ) = (v1, v2, v3, v4)
 
-    method methProxy action f dict = do
+    method _ action f dict = do
         void $ retrieve @k1 @v1 Proxy dict
         void $ retrieve @k2 @v2 Proxy dict
         void $ retrieve @k3 @v3 Proxy dict
         void $ retrieve @k4 @v4 Proxy dict
         let (v1, v2, v3, v4) = action
-        f (Proxy @k1) v1
-        f (Proxy @k2) v2
-        f (Proxy @k3) v3
+        void $ f (Proxy @k1) v1
+        void $ f (Proxy @k2) v2
+        void $ f (Proxy @k3) v3
         f (Proxy @k4) v4
-    describe _ t = output (mkDesc t (Proxy @k1) (Proxy @v1))
-                <> output (mkDesc t (Proxy @k2) (Proxy @v2))
-                <> output (mkDesc t (Proxy @k3) (Proxy @v3))
-                <> output (mkDesc t (Proxy @k4) (Proxy @v4))
+    describe _ = output (mkDesc (Proxy @k1) (Proxy @v1))
+              <> output (mkDesc (Proxy @k2) (Proxy @v2))
+              <> output (mkDesc (Proxy @k3) (Proxy @v3))
+              <> output (mkDesc (Proxy @k4) (Proxy @v4))
 instance ( KnownSymbol k1, Value v1
          , KnownSymbol k2, Value v2
          , KnownSymbol k3, Value v3
@@ -260,23 +251,23 @@ instance ( KnownSymbol k1, Value v1
                 , Payload k5 v5
                 ) = (v1, v2, v3, v4, v5)
 
-    method methProxy action f dict = do
+    method _ action f dict = do
         void $ retrieve @k1 @v1 Proxy dict
         void $ retrieve @k2 @v2 Proxy dict
         void $ retrieve @k3 @v3 Proxy dict
         void $ retrieve @k4 @v4 Proxy dict
         void $ retrieve @k5 @v5 Proxy dict
         let (v1, v2, v3, v4, v5) = action
-        f (Proxy @k1) v1
-        f (Proxy @k2) v2
-        f (Proxy @k3) v3
-        f (Proxy @k4) v4
+        void $ f (Proxy @k1) v1
+        void $ f (Proxy @k2) v2
+        void $ f (Proxy @k3) v3
+        void $ f (Proxy @k4) v4
         f (Proxy @k5) v5
-    describe _ t = output (mkDesc t (Proxy @k1) (Proxy @v1))
-                <> output (mkDesc t (Proxy @k2) (Proxy @v2))
-                <> output (mkDesc t (Proxy @k3) (Proxy @v3))
-                <> output (mkDesc t (Proxy @k4) (Proxy @v4))
-                <> output (mkDesc t (Proxy @k5) (Proxy @v5))
+    describe _ = output (mkDesc (Proxy @k1) (Proxy @v1))
+              <> output (mkDesc (Proxy @k2) (Proxy @v2))
+              <> output (mkDesc (Proxy @k3) (Proxy @v3))
+              <> output (mkDesc (Proxy @k4) (Proxy @v4))
+              <> output (mkDesc (Proxy @k5) (Proxy @v5))
 instance ( KnownSymbol k1, Value v1
          , KnownSymbol k2, Value v2
          , KnownSymbol k3, Value v3
@@ -300,7 +291,7 @@ instance ( KnownSymbol k1, Value v1
                 , Payload k6 v6
                 ) = (v1, v2, v3, v4, v5, v6)
 
-    method methProxy action f dict = do
+    method _ action f dict = do
         void $ retrieve @k1 @v1 Proxy dict
         void $ retrieve @k2 @v2 Proxy dict
         void $ retrieve @k3 @v3 Proxy dict
@@ -308,18 +299,18 @@ instance ( KnownSymbol k1, Value v1
         void $ retrieve @k5 @v5 Proxy dict
         void $ retrieve @k6 @v6 Proxy dict
         let (v1, v2, v3, v4, v5, v6) = action
-        f (Proxy @k1) v1
-        f (Proxy @k2) v2
-        f (Proxy @k3) v3
-        f (Proxy @k4) v4
-        f (Proxy @k5) v5
+        void $ f (Proxy @k1) v1
+        void $ f (Proxy @k2) v2
+        void $ f (Proxy @k3) v3
+        void $ f (Proxy @k4) v4
+        void $ f (Proxy @k5) v5
         f (Proxy @k6) v6
-    describe _ t = output (mkDesc t (Proxy @k1) (Proxy @v1))
-                <> output (mkDesc t (Proxy @k2) (Proxy @v2))
-                <> output (mkDesc t (Proxy @k3) (Proxy @v3))
-                <> output (mkDesc t (Proxy @k4) (Proxy @v4))
-                <> output (mkDesc t (Proxy @k5) (Proxy @v5))
-                <> output (mkDesc t (Proxy @k6) (Proxy @v6))
+    describe _ = output (mkDesc (Proxy @k1) (Proxy @v1))
+              <> output (mkDesc (Proxy @k2) (Proxy @v2))
+              <> output (mkDesc (Proxy @k3) (Proxy @v3))
+              <> output (mkDesc (Proxy @k4) (Proxy @v4))
+              <> output (mkDesc (Proxy @k5) (Proxy @v5))
+              <> output (mkDesc (Proxy @k6) (Proxy @v6))
 
 -- helper method to retrieve a value from a dictionary
 retrieve :: forall key value c m
@@ -330,13 +321,11 @@ retrieve :: forall key value c m
          => Proxy (key :: Symbol)
          -> Dict
          -> GoldenMT c m (Maybe value)
-retrieve pk dict = case query (Proxy @key) dict of
+retrieve pk dict = case query pk dict of
     Nothing -> pure Nothing
-    Just st -> case parseOnly (parser (Proxy @value)) st of
-        Left (Expected w g) -> error $ show ("parse (" <> r <> " :: " <> t <> ")", st, "Expected: " <> w <> "; But received: " <> g)
-        Left (ExpectedElement w g) -> error $ show ("parse (" <> r <> " :: " <> t <> ")", st, "Expected: " <> show w <> "; But received: " <> show g)
-        Left err            -> error $ show ("parse (" <> r <> " :: " <> t <> ")", st, err)
-        Right r  -> pure (Just r)
+    Just t -> case parser @value t of
+        Left err -> error $ err <> "\n  While decoding " <> k <> " of type " <> show ty
+        Right v  -> pure (Just v)
   where
-    r = fromList $ symbolVal (Proxy @key)
-    t = show $ typeRep (Proxy @value)
+    k  = show $ symbolVal pk
+    ty = show $ typeRep (Proxy @value)

@@ -30,7 +30,8 @@ import Inspector.Dict
 import Inspector.Monad
 import Inspector.Report
 import Inspector.Method
-import Inspector.Export.Types
+import Inspector.Export.Types hiding (input, output)
+import Inspector.Export.RefFile
 
 import qualified Inspector.Export.Markdown as Markdown
 import qualified Inspector.Export.Rust as Rust
@@ -43,11 +44,11 @@ import Foundation.Conduit
 import Foundation.Conduit.Textual
 import Foundation.VFS.FilePath
 
-import Basement.Nat
+
 import GHC.TypeLits
 
-import Control.Monad (void, forM)
-import Data.List (zip3)
+import Control.Monad (void)
+
 
 -- | Inspector's default main function
 --
@@ -87,23 +88,23 @@ golden proxy action = do
 
     file <- mkPath input
     -- 1. collect the Dicts
-    dics <- collectDics file
+    dics <- liftIO $ toList <$> parseRefFile file
     -- 2. execute the method according to the plan
     let c = case mode of
-                GoldenTest -> traverseWith (store TestVector) proxy action
+                GoldenTest -> traverseWith store proxy action
                            .| diffC
                            .| (sinkList >>= (yield . Report input))
                            .| prettyC
-                Generate TestVector -> traverseWith (store TestVector) proxy action
+                Generate TestVector -> traverseWith store proxy action
                                     .| genC
-                                    .| storeBackC
+                                    .| storeBackDictC
                 Generate Markdown -> do
                     Markdown.summary proxy
-                    traverseWith (store Markdown) proxy action .| genC .| Markdown.pop proxy
+                    traverseWith store proxy action .| genC .| Markdown.pop proxy
                 Generate Rust -> do
                     Rust.summary proxy
                     yield $  "const GOLDEN_TESTS : [TestVector;"<> show (fromCount (length dics)) <>"] =\n"
-                    traverseWith (store Rust) proxy action .| genC .| Rust.pop proxy
+                    traverseWith store proxy action .| genC .| Rust.pop proxy
                     yield "  ];\n\n"
     output' <- maybe (pure Nothing) (fmap Just . mkPath) (output mode)
     (close, h) <- liftIO $ case output' of
@@ -141,7 +142,7 @@ genC :: Monad m => Conduit (Word, Dict, a) (Word, a) m ()
 genC = awaitForever $ \(idx, _, new) -> yield (idx, new)
 
 traverseWith :: forall method c . (Golden method, Monoid c)
-             => (forall a k m . (Value a, KnownSymbol k) => Proxy k -> a -> GoldenMT c IO ())
+             => (forall a k . (Value a, KnownSymbol k) => Proxy k -> a -> GoldenMT c IO ())
              -> Proxy method
              -> Method method
              -> Conduit Dict (Word, Dict, c) GoldenT ()

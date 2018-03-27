@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 7f5848e70e0a51547b1d1c344d0df8b1b3241a92330bed3c35da256136436f03
+-- hash: c0974b8a0e72dba32ec7802e9e7af9549bd46d98aeb61ebc93f2fb5001e3f287
 
 name:           inspector
 version:        0.2
@@ -24,6 +24,7 @@ library
   hs-source-dirs:
       src
   default-extensions: NoImplicitPrelude TypeFamilies DataKinds OverloadedStrings
+  ghc-options: -Wall -Werror
   build-depends:
       base
     , basement >=0.0.7
@@ -40,6 +41,7 @@ library
       Inspector.Export.Markdown
       Inspector.Export.Rust
       Inspector.Export.Types
+      Inspector.Export.RefFile
   default-language: Haskell2010
 
 executable example
@@ -47,7 +49,7 @@ executable example
   hs-source-dirs:
       example/
   default-extensions: NoImplicitPrelude TypeFamilies DataKinds OverloadedStrings
-  ghc-options: -threaded -rtsopts -with-rtsopts=-N
+  ghc-options: -Wall -Werror -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       base
     , basement >=0.0.7

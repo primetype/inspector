@@ -1,21 +1,17 @@
 module Inspector.Report
     ( TestReport (..)
     , Report (..)
-    , pretty
     , prettyC
     ) where
 
 import Foundation
-import Foundation.Monad
 import Foundation.Conduit
 import Foundation.VFS
 import Inspector.Dict
-import Control.Monad (forM_, unless)
+import Control.Monad (forM_)
 
 import           Basement.Bounded
 import qualified Basement.Terminal.ANSI as ANSI
-
-import System.Exit
 
 data TestReport
     = Success | Failure Word [Diff]
@@ -54,33 +50,14 @@ prettyC = awaitForever $ \(Report path tests) -> do
     forM_ (failures tests) $ \(i,diffs) -> do
         yield $ "  * TestVector " <> show i <> "\n"
         forM_ diffs $ \x -> case x of
-            Missing k v -> yield $ "- " <> k <> " = " <> v <> "\n"
-            Added   k v -> yield $ "+ " <> k <> " = " <> v <> "\n"
+            Missing k v -> yield $ "- " <> k <> " = " <> show v <> "\n"
+            Added   k v -> yield $ "+ " <> k <> " = " <> show v <> "\n"
             Diff    k (v1, v2) -> yields
-                           [ "- " <> k <> " = " <> v1 <> "\n"
-                           , "+ " <> k <> " = " <> v2 <> "\n"
+                           [ "- " <> k <> " = " <> show v1 <> "\n"
+                           , "+ " <> k <> " = " <> show v2 <> "\n"
                            ]
 
 reset, green, red :: ANSI.Escape
 reset = ANSI.sgrReset
 green = ANSI.sgrForeground (zn64 2) True
 red = ANSI.sgrForeground (zn64 1) True
-
-pretty :: MonadIO io => Report -> io ()
-pretty (Report path tests) = liftIO $ do
-    putStrLn $ "GoldenTest: " <> filePathToString path
-    putStrLn $ "  Passed: " <> show (successes tests)
-    putStrLn $ "  Failed: " <> show (toInteger $ length failed)
-    putStrLn   ""
-    forM_ failed $ \(i,diffs) -> do
-        putStrLn $ "  * TestVector " <> show i
-        forM_ diffs $ \x -> case x of
-            Missing k v -> putStrLn $ "- " <> k <> " = " <> v
-            Added   k v -> putStrLn $ "+ " <> k <> " = " <> v
-            Diff    k (v1, v2) -> do
-                           putStrLn $ "- " <> k <> " = " <> v1
-                           putStrLn $ "+ " <> k <> " = " <> v2
-        putStrLn ""
-    unless (null failed) $ exitFailure
-  where
-    failed = failures tests

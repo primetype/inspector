@@ -23,6 +23,10 @@ default-extensions:
     - DataKinds
     - OverloadedStrings
 
+ghc-options:
+    - -Wall
+    - -Werror
+
 library:
   source-dirs: src
   exposed-modules:
@@ -35,6 +39,7 @@ library:
     - Inspector.Export.Markdown
     - Inspector.Export.Rust
     - Inspector.Export.Types
+    - Inspector.Export.RefFile
 
 executables:
   example:
