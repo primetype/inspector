@@ -93,7 +93,7 @@ valueBuilder (Value.Floating f) = emit (show f) -- TODO
 valueBuilder (Value.String s)   = emit (show s)
 valueBuilder (Value.Array arr) = case toList arr of
         []     -> emit "[]"
-        [x]    -> emit "[ " >> indent 2 >> valueBuilder x >> unindent >> emit " ]"
+        [x]    -> emit "[ " >> valueBuilder x >> emit " ]"
         (x:xs) -> do
             emit "[ " >> valueBuilder x
             forM_ xs $ \v -> emit ", " >> valueBuilder v

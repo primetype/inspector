@@ -18,9 +18,10 @@ module Inspector.Monad
 
     , GoldenT
     , Metadata(..)
-
     , summary
     , getMetadata
+    , goldenTFail
+    , goldenTFailed
     , Builder
     ) where
 
@@ -78,15 +79,27 @@ mkPath target = do
 
 -- | Monad responsible for controlling the execution flow of the test vectors
 --
-newtype Metadata = Metadata
-    { metaDescription :: String
+data Metadata = Metadata
+    { metaDescription  :: !String
+    , goldenTestFailed :: !Bool
     }
-  deriving (Typeable, Semigroup, Monoid)
+  deriving (Show, Eq, Typeable)
+instance Semigroup Metadata where
+    (<>) = mappend
+instance Monoid Metadata where
+    mempty = Metadata mempty False
+    mappend (Metadata d1 t1) (Metadata d2 t2) = Metadata (d1 <> d2) (t1 && t2)
 
 type GoldenT = GoldenMT Metadata IO
 
 summary :: String -> GoldenT ()
 summary b = withState $ \st -> ((), st { metaDescription = b })
+
+goldenTFail :: GoldenT ()
+goldenTFail = withState $ \st -> ((), st {goldenTestFailed = True})
+
+goldenTFailed :: GoldenT Bool
+goldenTFailed = goldenTestFailed <$> getMetadata
 
 getMetadata :: GoldenT Metadata
 getMetadata = withState $ \st -> (st, st)

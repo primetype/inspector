@@ -45,7 +45,7 @@ import Foundation.VFS.FilePath
 
 import GHC.TypeLits (KnownSymbol)
 
-import Control.Monad (void)
+import Control.Monad (void, when)
 
 
 -- | Inspector's default main function
@@ -62,11 +62,14 @@ defaultMain suites = do
             ["generate", "rust"] -> Generate Rust
             ["generate", "markdown"] -> Generate Markdown
             _ -> error "possible options are: <test|generate [vectors|markdown|rust]>"
-    void $ runGolden' (Config mode "tests/goldens") suites
+    void $ runGolden' (Config mode "tests/goldens") $ do
+        suites
+        t <- goldenTFailed
+        when t $ error "Failed due to previous errors."
 
 -- | group a set of golden tests
 group :: GoldenT () -> GoldenT ()
-group = void . exec
+group = id -- void . exec
 
 -- | generate the golden test from the specification and the method
 --

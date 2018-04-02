@@ -11,7 +11,7 @@ import Foundation.Monad
 
 import Control.Monad (forM_, unless)
 
-import Inspector.Monad (GoldenT)
+import Inspector.Monad (GoldenT, goldenTFail)
 
 import Inspector.TestVector.TestVector (TestVector, Entry(..))
 import Inspector.TestVector.Value (Value)
@@ -23,6 +23,8 @@ run path tvs = do
     -- 1. check the results of the testvectors
     let faillures = filter isInvalid tvs
     let successes = filter isValid   tvs
+
+    unless (null faillures) goldenTFail
 
     -- 2. print the summary
     runTestSummary path faillures successes
