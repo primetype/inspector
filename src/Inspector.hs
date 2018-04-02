@@ -32,6 +32,7 @@ import Inspector.Method
 import Inspector.Export.Types
 import Inspector.Export.RefFile
 import qualified Inspector.Export.Diff as Diff
+import qualified Inspector.Export.Rust as Rust
 
 import           Inspector.TestVector.Types      (Type)
 import           Inspector.TestVector.Value      (Value)
@@ -88,25 +89,12 @@ golden proxy action = do
     !tv1 <- liftIO $ toList <$> parseTestVectorFile file
     -- 2. run the method against each TestVector
     !tv2 <- runConduit $ yields tv1 .| traverseWith store proxy action .| sinkList
-
+    -- 3. keep only result
+    let tv3 = flip fmap tv2 $ \(a,_,c) -> (a, c) 
     case mode of
-        GoldenTest -> Diff.run input (fmap (\(w, _, tv) -> (w, tv)) tv2)
-        _          -> undefined -- TODO
-
-    {-
-    let c = case mode of
-                GoldenTest -> traverseWith store proxy action
-                           .| diffC
-                           .| (sinkList >>= (yield . Report input))
-                           .| prettyC
-                _ -> undefined
-    output' <- maybe (pure Nothing) (fmap Just . mkPath) (output mode)
-    (close, h) <- liftIO $ case output' of
-        Nothing -> pure (\_ -> pure (), stdout)
-        Just p  -> (closeFile,) <$> openFile p WriteMode
-    runConduit $  yields dics .| c .| toBytes UTF8 .| sinkHandle h
-    liftIO $ close h
--}
+        GoldenTest -> Diff.run input tv3
+        Generate Rust -> Rust.run input tv3
+        _             -> undefined
   where
     input :: FilePath
     input = unsafeFilePath Relative path'

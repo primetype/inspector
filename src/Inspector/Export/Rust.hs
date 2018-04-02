@@ -1,118 +1,101 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE Rank2Types #-}
+{-# LANGUAGE FlexibleContexts #-}
 
 module Inspector.Export.Rust
-    ( pop
-    , summary
+    ( run
     ) where
 
 import Foundation
-import Foundation.Collection (Element)
+import Foundation.VFS.FilePath (FilePath)
+import Foundation.Collection (nonEmpty_)
 import Foundation.Monad
-import Foundation.VFS
-import Foundation.VFS.FilePath
 
-import Foundation.Conduit
+import Control.Monad (forM_, when)
 
+import Inspector.Monad (GoldenT)
+import Inspector.Builder
+import Inspector.Export.Types (liftValue)
+import Inspector.TestVector.TestVector (TestVector, Entry(..))
+import Inspector.TestVector.Value (Value)
+import qualified Inspector.TestVector.Value as Value
+import Inspector.TestVector.Types (Type)
+import qualified Inspector.TestVector.Types as Type
+import Inspector.TestVector.Key (keyToString)
 
+run :: FilePath -> [(Word, TestVector (Type, Value, Value))] -> GoldenT ()
+run _ tvs = liftIO $ putStrLn $ runBuilder $ buildRust tvs
 
-import Inspector.Dict
-import Inspector.Monad hiding (summary)
+buildRust :: [(Word, TestVector (Type, Value, Value))] -> Builder ()
+buildRust tvs = do
+    defineType $ snd $ head $ nonEmpty_ tvs
+    newline
+    emit $ "const TEST_VECTORS : [TestVector;" <> show (fromCount (length tvs)) <> "] ="
+    newline
+    indent 4
+    consumeTestVectors tvs
+    unindent
 
-import Inspector.Method
-
-import Inspector.Export.Types
-
-
-
-
-
-exportTypeToRust :: ExportType -> String
-exportTypeToRust t = case t of
-    TypeBoolean -> "bool"
-    TypeSignedInteger ts -> "i" <> sizeToRust ts
-    TypeUnsignedInteger ts -> "u" <> sizeToRust ts
-    TypeDouble -> "f64"
-    TypeString -> "&'static str"
-    TypeArray et Nothing -> "&' static ["<>exportTypeToRust et<>"]"
-    TypeArray et (Just n) -> "["<>exportTypeToRust et<>";" <> show (fromCount n) <>"]"
-    TypeStruct [] -> ""
-    TypeStruct _xs -> undefined -- TODO !
+consumeTestVectors :: [(Word, TestVector (Type, Value, Value))] -> Builder ()
+consumeTestVectors l = emit "[ " >> go False l >> emit "];" >> newline
   where
-    sizeToRust Size8   =   "8"
-    sizeToRust Size16  =  "16"
-    sizeToRust Size32  =  "32"
-    sizeToRust Size64  =  "64"
-    sizeToRust Size128 = "128"
-    sizeToRust Size256 = "256"
+    go _ [] = pure ()
+    go b ((_, tv):xs) = do
+        when b $ emit ", "
+        emit "TestVector {" >> newline >> indent 4
+        forM_ (snd <$> toList tv) $ \ent -> do
+            let str = keyToString (entryKey ent)
+            let (t, v, _) = entryExtra ent
+            emit str >> emit ": " >> valueBuilder (liftValue t v) >> emit "," >> newline
+        unindent >> emit "  }" >> newline
+        go True xs
 
-buildIntermediarType :: String -> IntermediarType -> String
-buildIntermediarType alignment it = case it of
-    ITBoolean    b   -> if b then "true" else "false"
-    ITInteger    i   -> show i
-    ITDouble     d   -> show d
-    ITString     str -> show str
-    ITCollection [] -> "[]"
-    ITCollection [x] -> "[ " <> buildIntermediarType alignment x <> " ]"
-    ITCollection xs  -> "[ "
-                     <> intercalate ("\n"<> alignment <> ", ")
-                                    (buildIntermediarType (alignment <> "  ") <$> xs)
-                     <> "\n" <> alignment <> "]"
-    ITStructure  [] -> "{}"
-    ITStructure  [(n,v)] -> "{ " <> n <> " : " <> buildIntermediarType (alignment <> replicate (length n) ' ' <> "     ") v <> " }"
-    ITStructure  str -> "{ "
-                     <> intercalate ("\n"<> alignment <> ", ")
-                                    ((\(n, v) -> n <> " : " <> buildIntermediarType (alignment <> replicate (length n) ' ' <> "     ") v) <$> str)
-                     <> "\n" <> alignment <> "}"
+defineType :: TestVector (Type, Value, Value) -> Builder ()
+defineType tv = do
+    emit "#[derive(Debug)]" >> newline
+    emit "struct TestVector {" >> newline
+    indent 4
+    forM_ (snd <$> toList tv) $ \ent -> do
+        let (t, _, _) = entryExtra ent
+        let str = keyToString (entryKey ent) <> ": "
+        emit str >> indent (length str) >> emitType t >> emit "," >> unindent >> newline
+    unindent >> emit "}" >> newline
 
-summary :: Golden method
-        => Proxy method
-        -> Conduit a String GoldenT ()
-summary p = do
-    meta <- lift getMetadata
-    yield $ "/// # GoldenTests: " <> path <> "\n///\n"
-    yield $ "/// " <> (metaDescription meta <> "\n")
-    yield "///\n"
-    yield "/// ## Input(s)\n///\n"
-    yield "/// ```\n"
-    yields $ for inputs $ \(Description key enc _ ty _) ->
-         "/// " <> key <> " (" <> exportTypeToRust ty <> ") = " <> show enc <> "\n"
-    yield "/// ```\n"
-    yield "///\n"
-    yield "/// ## Output(s)\n///\n"
-    yield "/// ```\n"
-    yields $ for outputs $ \(Description key enc _ ty _) ->
-         "/// " <> key <> " (" <> exportTypeToRust ty <> ") = " <> show enc <> "\n"
-    yield "/// ```\n"
-    yield "struct TestVector {\n  "
-    yields $ intersperse ",\n  " $ for inputs $ \(Description key _ _ ty _) ->
-         key <> " : " <> exportTypeToRust ty
-    yield ",\n  "
-    yields $ intersperse ",\n  " $ for outputs $ \(Description key _ _ ty _) ->
-         key <> " : " <> exportTypeToRust ty
-    yield "\n}\n\n"
-  where
-    path = filePathToString $ unsafeFilePath Relative (getPath p)
-    Export inputs outputs = describe p
+emitType :: Type -> Builder ()
+emitType t = case t of
+    Type.Boolean    -> emit "bool"
+    Type.Unsigned8  -> emit "u8"
+    Type.Unsigned16 -> emit "u16"
+    Type.Unsigned32 -> emit "u32"
+    Type.Unsigned64 -> emit "u64"
+    Type.Signed8    -> emit "i8"
+    Type.Signed16   -> emit "i16"
+    Type.Signed32   -> emit "i32"
+    Type.Signed64   -> emit "i64"
+    Type.Float32    -> emit "f32"
+    Type.Float64    -> emit "f64"
+    Type.String     -> emit "&'static str"
+    Type.Array arr  -> emitArray arr
+    Type.Object _   -> undefined
+        -- TODO, this is a problem, we need to define objects
+        -- ahead as they cannot be defined inline of the definition.
 
-pop :: (Monad m, Golden method) => Proxy method -> Conduit (Word, Dict) String m ()
-pop p = awaitForever $ \(idx, dic) -> do
-    let is = findKeyVal dic inputs
-    let os = findKeyVal dic outputs
-    yield $ if idx == 1 then "  [ TestVector" else "  , TestVector"
-    yield "\n    { "
-    yields $ intersperse "\n    , " $ for is $ \(k,v) -> k <> " : " <> buildIntermediarType "" v
-    yield "\n    , "
-    yields $ intersperse "\n    , " $ for os $ \(k,v) -> k <> " : " <> buildIntermediarType "" v
-    yield "\n    }\n"
-  where
-    Export inputs outputs = describe p
+emitArray :: Type.Array -> Builder ()
+emitArray (Type.SizedArray ty sz) =
+    emit "[" >> emitType ty >> emit (";" <> show sz <> "]")
+emitArray (Type.UnsizedArray ty) =
+    emit "&'static [" >> emitType ty >> emit "]"
 
-for :: [a] -> (a -> b) -> [b]
-for = flip fmap
-
-findKeyVal :: Dict -> [Description] -> [Element Dict]
-findKeyVal _ [] = []
-findKeyVal d (Description k _ _ _ _:xs) = case lookup k d of
-    Nothing -> error $ "missing input: " <> k
-    Just v  -> (k, v) : findKeyVal d xs
+valueBuilder :: Value -> Builder ()
+valueBuilder (Value.Boolean b)  = emit $ if b then "true" else "false"
+valueBuilder (Value.Integer i)  = emit (show i)
+valueBuilder (Value.Floating f) = emit (show f) -- TODO
+valueBuilder (Value.String s)   = emit (show s)
+valueBuilder (Value.Array arr) = case toList arr of
+        []     -> emit "[]"
+        [x]    -> emit "[ " >> indent 2 >> valueBuilder x >> unindent >> emit " ]"
+        (x:xs) -> do
+            emit "[ " >> valueBuilder x
+            forM_ xs $ \v -> emit ", " >> valueBuilder v
+            emit "]"
+valueBuilder (Value.Object _) = undefined

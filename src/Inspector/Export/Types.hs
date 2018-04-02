@@ -12,6 +12,7 @@ module Inspector.Export.Types
     , createEntry
     , fromEntry
     , checkEntryType
+    , liftValue
 
     , withBoolean
     , withInteger

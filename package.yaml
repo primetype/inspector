@@ -36,7 +36,7 @@ library:
     - Inspector.Monad
 #    - Inspector.Report
 #    - Inspector.Export.Markdown
-#    - Inspector.Export.Rust
+    - Inspector.Export.Rust
     - Inspector.Export.Types
     - Inspector.Export.RefFile
     - Inspector.Export.Diff
