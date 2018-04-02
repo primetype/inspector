@@ -15,9 +15,8 @@ module Inspector.Method
     , HasMethod
     , Method
     , method
-    , describe
     , PathParameter
-    , Value
+    , IsValue
     , Golden
     ) where
 
@@ -29,12 +28,16 @@ import Control.Monad (void)
 import GHC.TypeLits
 import Data.Typeable
 
-import Inspector.Dict
 import Inspector.Monad
 import Inspector.Export.Types
+import           Inspector.TestVector.Key (symbolKey_)
+import           Inspector.TestVector.Types (Type)
+import           Inspector.TestVector.Value (Value)
+import           Inspector.TestVector.TestVector (TestVector, query, Entry(..))
 
--- | Alias Constraint Type for Value type
-type Value value = (Inspectable value, Typeable value)
+
+-- | Alias Constraint Type for IsValue type
+type IsValue value = (Inspectable value, Typeable value)
 
 -- | Alias Constraint type for golden test
 type Golden golden = (HasMethod golden, HasPath golden)
@@ -92,70 +95,54 @@ instance {-# OVERLAPPING #-} (KnownNat n, KnownSymbol path) => HasPath (PathPara
 -- | Type class to retrieve the parameter of the given method and to call the
 -- method on the fly
 --
--- This is used when generating or testing the test vectors.
---
--- @
--- import Crypto.Hash (hash, Digest, SHA1)
---
--- type GoldenSHA1 = "hash" :> "SHA1" :> Payload "payload" String :> Payload "hash" (Digest SHA1)
---
--- test :: (String -> Digest SHA1) -> Dict -> GoldenM ()
--- test = method (Proxy @GoldenSHA1)
--- @
---
 class HasMethod method where
     type Method method
 
     method :: forall c b m . Monad m
            => Proxy method
            -> Method method
-           -> (forall a k . (Value a, KnownSymbol k) => Proxy k -> a -> GoldenMT c m b)
-           -> Dict
+           -> (forall a k . (IsValue a, KnownSymbol k) => Proxy k -> Entry (Type, Value, a) -> GoldenMT c m b)
+           -> TestVector ()
            -> GoldenMT c m b
-
-    describe :: Proxy method -> Export
 
 instance (KnownSymbol path, HasMethod sub) => HasMethod (path :> sub) where
     type Method (path :> sub) = Method sub
     method _ = method (Proxy @sub)
-    describe _ = describe (Proxy @sub)
 
 instance (KnownSymbol path, KnownNat n, HasMethod sub) => HasMethod (PathParameter path n :> sub) where
     type Method (PathParameter path n :> sub) = Method sub
     method _ = method (Proxy @sub)
-    describe _ = describe (Proxy @sub)
 
-instance (KnownSymbol key, HasMethod sub, Value value, Arbitrary value) => HasMethod (Payload key value :> sub) where
+instance (KnownSymbol key, HasMethod sub, IsValue value, Arbitrary value) => HasMethod (Payload key value :> sub) where
     type Method (Payload key value :> sub) = value -> Method sub
 
-    describe _ = input (mkDesc (Proxy @key) (Proxy @value)) <> describe (Proxy @sub)
     method _ action f dict = do
         mvalue <- retrieve @key @value Proxy dict
         value <- case mvalue of
             Nothing -> error $ "missing key: " <> fromString (symbolVal (Proxy @key))
             Just value -> pure value
         void $ f (Proxy @key) value
-        method (Proxy @sub) (action value) f dict
+        let (_, _, v) = entryExtra value
+        method (Proxy @sub) (action v) f dict
 
-mkDesc :: forall key value . (KnownSymbol key, Value value) => Proxy key -> Proxy value -> Description
-mkDesc pkey pval = Description
-    { descriptionKey = fromList $ symbolVal pkey
-    , descriptionEncoding = documentation pval
-    , descriptionType = typeRep pval
-    , descriptionTargetType = exportType pval
-    , descriptionComment = Just $ show $ exportType pval
-    }
-
-instance (KnownSymbol key, Value value) => HasMethod (Payload key value) where
+instance (KnownSymbol key, IsValue value) => HasMethod (Payload key value) where
     type Method (Payload key value) = value
 
     method _ action f dict = do
-        void $ retrieve @key @value Proxy dict
-        f (Proxy @key) action
-    describe _ = output (mkDesc (Proxy @key) (Proxy @value))
+        ma <- retrieve @key @value Proxy dict
+        f (Proxy @key) (finalEntry (Proxy @key) ma action)
 
-instance ( KnownSymbol k1, Value v1
-         , KnownSymbol k2, Value v2
+finalEntry :: forall a k . (Inspectable a, KnownSymbol k)
+           => Proxy k -> Maybe (Entry (Type, Value, a)) -> a -> Entry (Type, Value, a)
+finalEntry p Nothing a =
+    let e = createEntry (symbolKey_ p) a
+     in e { entryExtra = (entryType e, entryValue e, a) }
+finalEntry _ (Just e) a =
+    let (t, v, _) = entryExtra e
+     in e { entryExtra = (t, v, a)}
+
+instance ( KnownSymbol k1, IsValue v1
+         , KnownSymbol k2, IsValue v2
          )
       => HasMethod ( Payload k1 v1
                    , Payload k2 v2
@@ -166,17 +153,17 @@ instance ( KnownSymbol k1, Value v1
                 ) = (v1, v2)
 
     method _ action f dict = do
-        void $ retrieve @k1 @v1 Proxy dict
-        void $ retrieve @k2 @v2 Proxy dict
+        mv1 <- retrieve @k1 @v1 Proxy dict
+        mv2 <- retrieve @k2 @v2 Proxy dict
         let (v1, v2) = action
-        void $ f (Proxy @k1) v1
-        f (Proxy @k2) v2
-    describe _ = output (mkDesc (Proxy @k1) (Proxy @v1))
-              <> output (mkDesc (Proxy @k2) (Proxy @v2))
+        let e1 = finalEntry (Proxy @k1) mv1 v1
+        let e2 = finalEntry (Proxy @k2) mv2 v2
+        void $ f (Proxy @k1) e1
+        f (Proxy @k2) e2
 
-instance ( KnownSymbol k1, Value v1
-         , KnownSymbol k2, Value v2
-         , KnownSymbol k3, Value v3
+instance ( KnownSymbol k1, IsValue v1
+         , KnownSymbol k2, IsValue v2
+         , KnownSymbol k3, IsValue v3
          )
       => HasMethod ( Payload k1 v1
                    , Payload k2 v2
@@ -189,21 +176,21 @@ instance ( KnownSymbol k1, Value v1
                 ) = (v1, v2, v3)
 
     method _ action f dict = do
-        void $ retrieve @k1 @v1 Proxy dict
-        void $ retrieve @k2 @v2 Proxy dict
-        void $ retrieve @k3 @v3 Proxy dict
+        mv1 <- retrieve @k1 @v1 Proxy dict
+        mv2 <- retrieve @k2 @v2 Proxy dict
+        mv3 <- retrieve @k3 @v3 Proxy dict
         let (v1, v2, v3) = action
-        void $ f (Proxy @k1) v1
-        void $ f (Proxy @k2) v2
-        f (Proxy @k3) v3
-    describe _ = output (mkDesc (Proxy @k1) (Proxy @v1))
-              <> output (mkDesc (Proxy @k2) (Proxy @v2))
-              <> output (mkDesc (Proxy @k3) (Proxy @v3))
+        let e1 = finalEntry (Proxy @k1) mv1 v1
+        let e2 = finalEntry (Proxy @k2) mv2 v2
+        let e3 = finalEntry (Proxy @k3) mv3 v3
+        void $ f (Proxy @k1) e1
+        void $ f (Proxy @k2) e2
+        f (Proxy @k3) e3
 
-instance ( KnownSymbol k1, Value v1
-         , KnownSymbol k2, Value v2
-         , KnownSymbol k3, Value v3
-         , KnownSymbol k4, Value v4
+instance ( KnownSymbol k1, IsValue v1
+         , KnownSymbol k2, IsValue v2
+         , KnownSymbol k3, IsValue v3
+         , KnownSymbol k4, IsValue v4
          )
       => HasMethod ( Payload k1 v1
                    , Payload k2 v2
@@ -218,24 +205,25 @@ instance ( KnownSymbol k1, Value v1
                 ) = (v1, v2, v3, v4)
 
     method _ action f dict = do
-        void $ retrieve @k1 @v1 Proxy dict
-        void $ retrieve @k2 @v2 Proxy dict
-        void $ retrieve @k3 @v3 Proxy dict
-        void $ retrieve @k4 @v4 Proxy dict
+        mv1 <- retrieve @k1 @v1 Proxy dict
+        mv2 <- retrieve @k2 @v2 Proxy dict
+        mv3 <- retrieve @k3 @v3 Proxy dict
+        mv4 <- retrieve @k4 @v4 Proxy dict
         let (v1, v2, v3, v4) = action
-        void $ f (Proxy @k1) v1
-        void $ f (Proxy @k2) v2
-        void $ f (Proxy @k3) v3
-        f (Proxy @k4) v4
-    describe _ = output (mkDesc (Proxy @k1) (Proxy @v1))
-              <> output (mkDesc (Proxy @k2) (Proxy @v2))
-              <> output (mkDesc (Proxy @k3) (Proxy @v3))
-              <> output (mkDesc (Proxy @k4) (Proxy @v4))
-instance ( KnownSymbol k1, Value v1
-         , KnownSymbol k2, Value v2
-         , KnownSymbol k3, Value v3
-         , KnownSymbol k4, Value v4
-         , KnownSymbol k5, Value v5
+        let e1 = finalEntry (Proxy @k1) mv1 v1
+        let e2 = finalEntry (Proxy @k2) mv2 v2
+        let e3 = finalEntry (Proxy @k3) mv3 v3
+        let e4 = finalEntry (Proxy @k4) mv4 v4
+        void $ f (Proxy @k1) e1
+        void $ f (Proxy @k2) e2
+        void $ f (Proxy @k3) e3
+        f (Proxy @k4) e4
+
+instance ( KnownSymbol k1, IsValue v1
+         , KnownSymbol k2, IsValue v2
+         , KnownSymbol k3, IsValue v3
+         , KnownSymbol k4, IsValue v4
+         , KnownSymbol k5, IsValue v5
          )
       => HasMethod ( Payload k1 v1
                    , Payload k2 v2
@@ -252,28 +240,29 @@ instance ( KnownSymbol k1, Value v1
                 ) = (v1, v2, v3, v4, v5)
 
     method _ action f dict = do
-        void $ retrieve @k1 @v1 Proxy dict
-        void $ retrieve @k2 @v2 Proxy dict
-        void $ retrieve @k3 @v3 Proxy dict
-        void $ retrieve @k4 @v4 Proxy dict
-        void $ retrieve @k5 @v5 Proxy dict
+        mv1 <- retrieve @k1 @v1 Proxy dict
+        mv2 <- retrieve @k2 @v2 Proxy dict
+        mv3 <- retrieve @k3 @v3 Proxy dict
+        mv4 <- retrieve @k4 @v4 Proxy dict
+        mv5 <- retrieve @k5 @v5 Proxy dict
         let (v1, v2, v3, v4, v5) = action
-        void $ f (Proxy @k1) v1
-        void $ f (Proxy @k2) v2
-        void $ f (Proxy @k3) v3
-        void $ f (Proxy @k4) v4
-        f (Proxy @k5) v5
-    describe _ = output (mkDesc (Proxy @k1) (Proxy @v1))
-              <> output (mkDesc (Proxy @k2) (Proxy @v2))
-              <> output (mkDesc (Proxy @k3) (Proxy @v3))
-              <> output (mkDesc (Proxy @k4) (Proxy @v4))
-              <> output (mkDesc (Proxy @k5) (Proxy @v5))
-instance ( KnownSymbol k1, Value v1
-         , KnownSymbol k2, Value v2
-         , KnownSymbol k3, Value v3
-         , KnownSymbol k4, Value v4
-         , KnownSymbol k5, Value v5
-         , KnownSymbol k6, Value v6
+        let e1 = finalEntry (Proxy @k1) mv1 v1
+        let e2 = finalEntry (Proxy @k2) mv2 v2
+        let e3 = finalEntry (Proxy @k3) mv3 v3
+        let e4 = finalEntry (Proxy @k4) mv4 v4
+        let e5 = finalEntry (Proxy @k5) mv5 v5
+        void $ f (Proxy @k1) e1
+        void $ f (Proxy @k2) e2
+        void $ f (Proxy @k3) e3
+        void $ f (Proxy @k4) e4
+        f (Proxy @k5) e5
+
+instance ( KnownSymbol k1, IsValue v1
+         , KnownSymbol k2, IsValue v2
+         , KnownSymbol k3, IsValue v3
+         , KnownSymbol k4, IsValue v4
+         , KnownSymbol k5, IsValue v5
+         , KnownSymbol k6, IsValue v6
          )
       => HasMethod ( Payload k1 v1
                    , Payload k2 v2
@@ -292,40 +281,47 @@ instance ( KnownSymbol k1, Value v1
                 ) = (v1, v2, v3, v4, v5, v6)
 
     method _ action f dict = do
-        void $ retrieve @k1 @v1 Proxy dict
-        void $ retrieve @k2 @v2 Proxy dict
-        void $ retrieve @k3 @v3 Proxy dict
-        void $ retrieve @k4 @v4 Proxy dict
-        void $ retrieve @k5 @v5 Proxy dict
-        void $ retrieve @k6 @v6 Proxy dict
+        mv1 <- retrieve @k1 @v1 Proxy dict
+        mv2 <- retrieve @k2 @v2 Proxy dict
+        mv3 <- retrieve @k3 @v3 Proxy dict
+        mv4 <- retrieve @k4 @v4 Proxy dict
+        mv5 <- retrieve @k5 @v5 Proxy dict
+        mv6 <- retrieve @k6 @v6 Proxy dict
         let (v1, v2, v3, v4, v5, v6) = action
-        void $ f (Proxy @k1) v1
-        void $ f (Proxy @k2) v2
-        void $ f (Proxy @k3) v3
-        void $ f (Proxy @k4) v4
-        void $ f (Proxy @k5) v5
-        f (Proxy @k6) v6
-    describe _ = output (mkDesc (Proxy @k1) (Proxy @v1))
-              <> output (mkDesc (Proxy @k2) (Proxy @v2))
-              <> output (mkDesc (Proxy @k3) (Proxy @v3))
-              <> output (mkDesc (Proxy @k4) (Proxy @v4))
-              <> output (mkDesc (Proxy @k5) (Proxy @v5))
-              <> output (mkDesc (Proxy @k6) (Proxy @v6))
+        let e1 = finalEntry (Proxy @k1) mv1 v1
+        let e2 = finalEntry (Proxy @k2) mv2 v2
+        let e3 = finalEntry (Proxy @k3) mv3 v3
+        let e4 = finalEntry (Proxy @k4) mv4 v4
+        let e5 = finalEntry (Proxy @k5) mv5 v5
+        let e6 = finalEntry (Proxy @k6) mv6 v6
+        void $ f (Proxy @k1) e1
+        void $ f (Proxy @k2) e2
+        void $ f (Proxy @k3) e3
+        void $ f (Proxy @k4) e4
+        void $ f (Proxy @k5) e5
+        f (Proxy @k6) e6
 
 -- helper method to retrieve a value from a dictionary
 retrieve :: forall key value c m
-          . ( Value value
+          . ( IsValue value
             , Monad m
             , KnownSymbol key
             )
          => Proxy (key :: Symbol)
-         -> Dict
-         -> GoldenMT c m (Maybe value)
+         -> TestVector ()
+         -> GoldenMT c m (Maybe (Entry (Type, Value, value)))
 retrieve pk dict = case query pk dict of
     Nothing -> pure Nothing
-    Just t -> case parser @value t of
-        Left err -> error $ err <> "\n  While decoding " <> k <> " of type " <> show ty
-        Right v  -> pure (Just v)
+    Just e ->
+        let en = checkEntryType (Proxy @value) e
+         in case parser @value (snd $ entryExtra en) of
+            Left err -> error $ err <> "\n  While decoding " <> k <> " of type " <> show ty
+            Right v  -> pure $ Just $ Entry
+                { entryKey = entryKey en
+                , entryType = entryType en
+                , entryValue = entryValue en
+                , entryExtra = (fst (entryExtra en), snd (entryExtra en), v)
+                }
   where
     k  = show $ symbolVal pk
     ty = show $ typeRep (Proxy @value)

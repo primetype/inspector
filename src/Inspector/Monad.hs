@@ -33,8 +33,10 @@ import Foundation.String.Builder
 
 import GHC.TypeLits
 
-import Inspector.Dict
 import Inspector.Export.Types
+import Inspector.TestVector.TestVector (TestVector(..), Entry(..), add)
+import Inspector.TestVector.Types (Type)
+import Inspector.TestVector.Value (Value)
 
 data Mode = Generate !OutputType
           | GoldenTest
@@ -91,9 +93,17 @@ getMetadata = withState $ \st -> (st, st)
 
 -- | Monad for a running golden test
 --
-type GoldenM = GoldenMT Dict IO
+type GoldenM = GoldenMT (TestVector (Type, Value, Value)) IO
 
 store :: (KnownSymbol key, Inspectable value)
-      => Proxy (key :: Symbol) -> value -> GoldenM ()
-store pk val = withState $ \dict ->
-    ((), add pk (builder val) dict )
+      => Proxy (key :: Symbol) -> Entry (Type, Value, value) -> GoldenM ()
+store pk ent = withState $ \dict ->
+    ((), add pk ent' dict)
+  where
+    (t, _, a) = entryExtra ent
+    ent' = Entry
+        { entryType = entryType ent
+        , entryValue = entryValue ent
+        , entryKey = entryKey ent
+        , entryExtra = (t, entryValue ent, builder a)
+        }

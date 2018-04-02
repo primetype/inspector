@@ -7,11 +7,14 @@ module Inspector.Report
 import Foundation
 import Foundation.Conduit
 import Foundation.VFS
-import Inspector.Dict
 import Control.Monad (forM_)
 
 import           Basement.Bounded
 import qualified Basement.Terminal.ANSI as ANSI
+
+import Inspector.TestVector.TestVector (TestVector, Entry)
+import Inspector.TestVector.Value (Value)
+import Inspector.TestVector.Key (Key)
 
 data TestReport
     = Success | Failure Word [Diff]

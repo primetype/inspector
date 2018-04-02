@@ -21,8 +21,6 @@ import Data.List (deleteFirstsBy)
 
 import GHC.TypeLits
 
-import Inspector.Export.Types (IntermediarType)
-
 newtype Dict = Dict { dictToList :: [(String, IntermediarType)] }
   deriving (Show, Eq, Ord, Typeable, Semigroup, Monoid, Collection, Sequential, IndexedCollection, Foldable)
 instance KeyedCollection Dict where

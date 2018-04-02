@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: c0974b8a0e72dba32ec7802e9e7af9549bd46d98aeb61ebc93f2fb5001e3f287
+-- hash: 59ee92a2066ea37118dc8ed639764cfad795064678c397eae1b5aca18efdead4
 
 name:           inspector
 version:        0.2
@@ -35,13 +35,16 @@ library
       Inspector
   other-modules:
       Inspector.Method
-      Inspector.Dict
       Inspector.Monad
-      Inspector.Report
-      Inspector.Export.Markdown
-      Inspector.Export.Rust
       Inspector.Export.Types
       Inspector.Export.RefFile
+      Inspector.Export.Diff
+      Inspector.Parser
+      Inspector.Builder
+      Inspector.TestVector.Key
+      Inspector.TestVector.Types
+      Inspector.TestVector.Value
+      Inspector.TestVector.TestVector
   default-language: Haskell2010
 
 executable example

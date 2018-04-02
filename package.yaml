@@ -33,13 +33,19 @@ library:
     - Inspector
   other-modules:
     - Inspector.Method
-    - Inspector.Dict
     - Inspector.Monad
-    - Inspector.Report
-    - Inspector.Export.Markdown
-    - Inspector.Export.Rust
+#    - Inspector.Report
+#    - Inspector.Export.Markdown
+#    - Inspector.Export.Rust
     - Inspector.Export.Types
     - Inspector.Export.RefFile
+    - Inspector.Export.Diff
+    - Inspector.Parser
+    - Inspector.Builder
+    - Inspector.TestVector.Key
+    - Inspector.TestVector.Types
+    - Inspector.TestVector.Value
+    - Inspector.TestVector.TestVector
 
 executables:
   example:
