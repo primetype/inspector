@@ -10,10 +10,13 @@ import Foundation
 import Foundation.VFS.FilePath (FilePath)
 import Foundation.Collection (nonEmpty_)
 import Foundation.Monad
+import Foundation.IO (withFile, IOMode(..), hPut)
+import Foundation.VFS.FilePath
+import Foundation.String (toBytes, Encoding(UTF8))
 
 import Control.Monad (forM_, when)
 
-import Inspector.Monad (GoldenT)
+import Inspector.Monad (GoldenT, Config(..), ask, mkPath)
 import Inspector.Builder
 import Inspector.Export.Types (liftValue)
 import Inspector.TestVector.TestVector (TestVector, Entry(..))
@@ -24,7 +27,19 @@ import qualified Inspector.TestVector.Types as Type
 import Inspector.TestVector.Key (keyToString)
 
 run :: FilePath -> [(Word, TestVector (Type, Value, Value))] -> GoldenT ()
-run _ tvs = liftIO $ putStrLn $ runBuilder $ buildRust tvs
+run path tvs = do
+    stdout <- getStdout <$> ask
+    fp <- mkfp
+
+    let out = runBuilder $ buildRust tvs
+
+    liftIO $ if stdout
+        then putStrLn out
+        else withFile fp  WriteMode $ flip hPut (toBytes UTF8 out)
+  where
+    mkfp = do
+        fp <- mkPath path
+        pure $ fromString $ toList $ (filePathToString fp) <> ".rs"
 
 buildRust :: [(Word, TestVector (Type, Value, Value))] -> Builder ()
 buildRust tvs = do

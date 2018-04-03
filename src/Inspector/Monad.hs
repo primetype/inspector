@@ -46,6 +46,7 @@ data Mode = Generate !OutputType
 data Config = Config
     { getMode :: !Mode
     , getRoot :: !FilePath
+    , getStdout :: !Bool
     }
   deriving (Show, Eq, Typeable)
 
@@ -84,8 +85,7 @@ data Metadata = Metadata
     , goldenTestFailed :: !Bool
     }
   deriving (Show, Eq, Typeable)
-instance Semigroup Metadata where
-    (<>) = mappend
+instance Semigroup Metadata
 instance Monoid Metadata where
     mempty = Metadata mempty False
     mappend (Metadata d1 t1) (Metadata d2 t2) = Metadata (d1 <> d2) (t1 && t2)

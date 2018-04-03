@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 926d03e25b3d525625e6806d3a80d9f3aa3d6d318a7fe507447d04079a7f439f
+-- hash: 8e5c89921ea7dd6502705248f094bcf952541d5f62b9cd5e70a7bc4a6543410a
 
 name:           inspector
 version:        0.2
@@ -28,6 +28,7 @@ library
   build-depends:
       base
     , basement >=0.0.7
+    , cli
     , cryptonite
     , foundation >=0.0.20
     , memory >=0.14.15

@@ -46,6 +46,8 @@ library:
     - Inspector.TestVector.Types
     - Inspector.TestVector.Value
     - Inspector.TestVector.TestVector
+  dependencies:
+    - cli
 
 executables:
   example:

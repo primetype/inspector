@@ -46,26 +46,48 @@ import Foundation.VFS.FilePath
 import GHC.TypeLits (KnownSymbol)
 
 import Control.Monad (void, when)
+import Data.Version (Version(..))
 
+import qualified Console.Options as CLI
 
 -- | Inspector's default main function
 --
 -- will get the arguments and configure the 'Mode' from the command line
 defaultMain :: GoldenT () -> IO ()
-defaultMain suites = do
-    args <- getArgs
-    let mode = case args of
-            []       -> GoldenTest
-            ["test"] -> GoldenTest
-            ["generate"] -> Generate TestVector
-            ["generate", "vectors"] -> Generate TestVector
-            ["generate", "rust"] -> Generate Rust
-            ["generate", "markdown"] -> Generate Markdown
-            _ -> error "possible options are: <test|generate [vectors|markdown|rust]>"
-    void $ runGolden' (Config mode "tests/goldens") $ do
-        suites
-        t <- goldenTFailed
-        when t $ error "Failed due to previous errors."
+defaultMain suites = CLI.defaultMain $ do
+    CLI.programName "inspector"
+    CLI.programVersion $ Version [0,1] ["alpha"]
+    CLI.programDescription "Golden Tests and test vectors management"
+
+    goldenpath <- CLI.flagParam (CLI.FlagShort 'd' <> CLI.FlagLong "root" <> CLI.FlagDescription "root path for the golden tests")
+                                (CLI.FlagRequired (Right . fromString))
+
+    CLI.command "test" $ runCommandTest goldenpath suites
+    CLI.command "generate" $ runCommandGenerate goldenpath suites
+
+runCommandTest :: CLI.FlagParam FilePath -> GoldenT () -> CLI.OptionDesc (IO ()) ()
+runCommandTest goldenpath suites = do
+    CLI.action $ \get -> do
+        let p = fromMaybe "tests/goldens" (get goldenpath)
+        void $ runGolden' (Config GoldenTest p False) $ do
+            void $ suites
+            t <- goldenTFailed
+            when t $ error "Failed due to previous errors."
+
+runCommandGenerate :: CLI.FlagParam FilePath -> GoldenT () -> CLI.OptionDesc (IO ()) ()
+runCommandGenerate goldenpath suites = do
+    out <- CLI.flag $ CLI.FlagLong "stdout" <> CLI.FlagDescription "generate to stdout instead of the appropriate file path"
+
+    CLI.command "rust" $ generate (Generate Rust) out
+    CLI.command "markdown" $ generate (Generate Markdown) out
+    CLI.command "test-vectors" $ generate (Generate TestVector) out
+  where
+    generate gen outf = CLI.action $ \get -> do
+        let p = fromMaybe "tests/goldens" (get goldenpath)
+        void $ runGolden' (Config gen p (get outf)) $ do
+            void $ suites
+            t <- goldenTFailed
+            when t $ error "Failed due to previous errors."
 
 -- | group a set of golden tests
 group :: GoldenT () -> GoldenT ()
