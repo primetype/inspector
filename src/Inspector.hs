@@ -31,6 +31,7 @@ module Inspector
       Config(..)
     , Mode(..)
     , defaultMain
+    , defaultTest
     , GoldenMT
     , GoldenT
     ) where
@@ -58,6 +59,10 @@ import Control.Monad (void, when)
 import Data.Version (Version(..))
 
 import qualified Console.Options as CLI
+
+-- | handy one for test suite for cabal
+defaultTest :: GoldenT () -> IO ()
+defaultTest = CLI.defaultMain . runCommandTest
 
 -- | Inspector's default main function
 --
