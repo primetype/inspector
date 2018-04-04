@@ -12,10 +12,13 @@ module Inspector.TestVector.TestVector
     , query
     , add
     , add'
+    , inputs
+    , outputs
     ) where
 
 import           Foundation hiding (String, Array)
 import           Foundation.Collection (KeyedCollection, Element, IndexedCollection(..))
+import qualified Foundation            as F (String)
 import qualified Foundation.Collection as F
 
 import           Control.Monad (void, forM_)
@@ -32,6 +35,8 @@ data Entry a = Entry
     { entryKey   :: !Key
     , entryValue :: !Value
     , entryType  :: !Type
+    , entryInput :: !(Maybe Bool)
+    , entryDoc   :: !(Maybe F.String)
     , entryExtra :: !a
     }
   deriving (Show, Eq, Ord, Typeable)
@@ -41,7 +46,7 @@ entryParser = do
     key <- keyParser
     Parser.whiteSpaces >> Parser.element '=' >> Parser.whiteSpaces
     value <- valueParser
-    pure $ Entry key value (getValueType value) ()
+    pure $ Entry key value (getValueType value) Nothing Nothing ()
 
 entryBuilder :: Entry (Type, Value) -> Builder ()
 entryBuilder Entry{..} = do
@@ -68,6 +73,12 @@ instance IsList (TestVector a) where
     type Item (TestVector a) = (Key, Entry a)
     toList (TestVector l) = l
     fromList = TestVector
+
+inputs :: TestVector a -> [Entry a]
+inputs = filter (fromMaybe undefined . entryInput) . fmap snd . toList
+
+outputs :: TestVector a -> [Entry a]
+outputs = filter (not . fromMaybe undefined . entryInput) . fmap snd . toList
 
 query :: KnownSymbol key => Proxy key -> TestVector a -> Maybe (Entry a)
 query = F.lookup . symbolKey_

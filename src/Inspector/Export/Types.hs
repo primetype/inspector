@@ -106,22 +106,26 @@ class Inspectable a where
     -- | seralise the object into a value
     builder :: a -> Value
 
-createEntry :: forall a . Inspectable a => Key -> a -> Entry (Type, Value)
-createEntry k v = Entry
+createEntry :: forall a . Inspectable a => Key -> a -> Bool -> Entry (Type, Value)
+createEntry k v isInput = Entry
     { entryKey = k
     , entryType = t
     , entryValue = v'
+    , entryInput = Just isInput
+    , entryDoc   = Just (documentation (Proxy @a))
     , entryExtra = (t, v')
     }
   where
     t = exportType (Proxy @a)
     v' = builder v
 
-checkEntryType :: Inspectable a => Proxy a -> Entry () -> Entry (Type, Value)
-checkEntryType p e = Entry
+checkEntryType :: Inspectable a => Proxy a -> Entry () -> Bool -> Entry (Type, Value)
+checkEntryType p e isInput = Entry
     { entryKey = entryKey e
     , entryType = entryType e
     , entryValue = entryValue e
+    , entryInput = Just isInput
+    , entryDoc   = Just (documentation p)
     , entryExtra = (t, liftValue t (entryValue e))
     }
   where
@@ -213,12 +217,12 @@ instance Inspectable Double where
     parser = withDouble "Double" pure
     builder  = Value.Floating
 instance Inspectable String where
-    documentation _ = "Bouble quoted, encoded string."
+    documentation _ = "UTF8 string"
     exportType _ = Type.String
     parser = withString "String" pure
     builder  = Value.String
 instance Inspectable (Block Word8) where
-    documentation _ = "hexadecimal encoded bytes"
+    documentation _ = "array of bytes"
     exportType _ = Type.Array (Type.UnsizedArray Type.Unsigned8)
     parser it = withCollection "Block Word8" (fmap fromList . mapM parser . toList) it
             <|> withString "Block Word8" (first fromList . convertFromBase Base16) it
@@ -230,7 +234,9 @@ instance (Typeable a, Inspectable a) => Inspectable [a] where
     parser = withCollection ("["<>show (typeRep (Proxy @a))<>"]") $ fmap fromList . mapM parser . toList
     builder l = Value.Array $ fromList $ builder <$> l
 instance (HashAlgorithm hash, KnownNat (HashDigestSize hash)) => Inspectable (Digest hash) where
-    documentation _ = "hexadecimal encoded bytes"
+    documentation _ = "bytes representing a digest of " <> show size <> " bytes."
+      where
+        size = natVal $ Proxy @(HashDigestSize hash)
     exportType _ = Type.Array (Type.SizedArray Type.Unsigned8 size)
       where
         size = fromInteger $ natVal $ Proxy @(HashDigestSize hash)
@@ -241,12 +247,14 @@ instance (HashAlgorithm hash, KnownNat (HashDigestSize hash)) => Inspectable (Di
             Just v  -> pure v
     builder t = builder (convert t :: Block Word8)
 instance Inspectable Bytes where
-    documentation _ = "hexadecimal encoded bytes"
+    documentation _ = "array of bytes"
     exportType _ = exportType (Proxy @(Block Word8))
     parser t = convert <$> (parser t :: Either String (Block Word8))
     builder t = builder (convert t :: Block Word8)
 instance (HashAlgorithm hash, KnownNat (HashDigestSize hash)) => Inspectable (HMAC hash) where
-    documentation _ = "hexadecimal encoded bytes"
+    documentation _ = "bytes representing a HMAC digest of " <> show size <> " bytes."
+      where
+        size = natVal $ Proxy @(HashDigestSize hash)
     exportType _ = exportType (Proxy @(Digest hash))
     parser t = HMAC <$> parser t
     builder t = builder (convert t :: Block Word8)

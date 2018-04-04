@@ -19,7 +19,7 @@ import Control.Monad (forM_, when)
 import Inspector.Monad (GoldenT, Config(..), ask, mkPath)
 import Inspector.Builder
 import Inspector.Export.Types (liftValue)
-import Inspector.TestVector.TestVector (TestVector, Entry(..))
+import Inspector.TestVector.TestVector (TestVector, Entry(..), inputs, outputs)
 import Inspector.TestVector.Value (Value)
 import qualified Inspector.TestVector.Value as Value
 import Inspector.TestVector.Types (Type)
@@ -58,23 +58,30 @@ consumeTestVectors l = emit "[ " >> go False l >> emit "];" >> newline
     go b ((_, tv):xs) = do
         when b $ emit ", "
         emit "TestVector {" >> newline >> indent 4
-        forM_ (snd <$> toList tv) $ \ent -> do
-            let str = keyToString (entryKey ent)
-            let (t, v, _) = entryExtra ent
-            emit str >> emit ": " >> valueBuilder (liftValue t v) >> emit "," >> newline
+        forM_ (inputs tv) go'
+        forM_ (outputs tv) go'
         unindent >> emit "  }" >> newline
         go True xs
+    go' ent = do
+        let str = keyToString (entryKey ent)
+        let (t, v, _) = entryExtra ent
+        emit str >> emit ": " >> valueBuilder (liftValue t v) >> emit "," >> newline
 
 defineType :: TestVector (Type, Value, Value) -> Builder ()
 defineType tv = do
     emit "#[derive(Debug)]" >> newline
     emit "struct TestVector {" >> newline
     indent 4
-    forM_ (snd <$> toList tv) $ \ent -> do
+    forM_ (inputs tv) $ go
+    forM_ (outputs tv) $ go
+    unindent >> emit "}" >> newline
+  where
+    go ent = do
         let (t, _, _) = entryExtra ent
         let str = keyToString (entryKey ent) <> ": "
+        forM_ (entryDoc ent) $ \doc ->
+            emit ("/// " <> doc) >> newline
         emit str >> indent (length str) >> emitType t >> emit "," >> unindent >> newline
-    unindent >> emit "}" >> newline
 
 emitType :: Type -> Builder ()
 emitType t = case t of

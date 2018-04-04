@@ -117,7 +117,7 @@ instance (KnownSymbol key, HasMethod sub, IsValue value, Arbitrary value) => Has
     type Method (Payload key value :> sub) = value -> Method sub
 
     method _ action f dict = do
-        mvalue <- retrieve @key @value Proxy dict
+        mvalue <- retrieve @key @value Proxy True dict
         value <- case mvalue of
             Nothing -> error $ "missing key: " <> fromString (symbolVal (Proxy @key))
             Just value -> pure value
@@ -129,17 +129,17 @@ instance (KnownSymbol key, IsValue value) => HasMethod (Payload key value) where
     type Method (Payload key value) = value
 
     method _ action f dict = do
-        ma <- retrieve @key @value Proxy dict
+        ma <- retrieve @key @value Proxy False dict
         f (Proxy @key) (finalEntry (Proxy @key) ma action)
 
 finalEntry :: forall a k . (Inspectable a, KnownSymbol k)
            => Proxy k -> Maybe (Entry (Type, Value, a)) -> a -> Entry (Type, Value, a)
 finalEntry p Nothing a =
-    let e = createEntry (symbolKey_ p) a
+    let e = createEntry (symbolKey_ p) a False
      in e { entryExtra = (entryType e, entryValue e, a) }
 finalEntry _ (Just e) a =
     let (t, v, _) = entryExtra e
-     in e { entryExtra = (t, v, a)}
+     in e { entryExtra = (t, v, a), entryInput = Just False }
 
 instance ( KnownSymbol k1, IsValue v1
          , KnownSymbol k2, IsValue v2
@@ -153,8 +153,8 @@ instance ( KnownSymbol k1, IsValue v1
                 ) = (v1, v2)
 
     method _ action f dict = do
-        mv1 <- retrieve @k1 @v1 Proxy dict
-        mv2 <- retrieve @k2 @v2 Proxy dict
+        mv1 <- retrieve @k1 @v1 Proxy False dict
+        mv2 <- retrieve @k2 @v2 Proxy False dict
         let (v1, v2) = action
         let e1 = finalEntry (Proxy @k1) mv1 v1
         let e2 = finalEntry (Proxy @k2) mv2 v2
@@ -176,9 +176,9 @@ instance ( KnownSymbol k1, IsValue v1
                 ) = (v1, v2, v3)
 
     method _ action f dict = do
-        mv1 <- retrieve @k1 @v1 Proxy dict
-        mv2 <- retrieve @k2 @v2 Proxy dict
-        mv3 <- retrieve @k3 @v3 Proxy dict
+        mv1 <- retrieve @k1 @v1 Proxy False dict
+        mv2 <- retrieve @k2 @v2 Proxy False dict
+        mv3 <- retrieve @k3 @v3 Proxy False dict
         let (v1, v2, v3) = action
         let e1 = finalEntry (Proxy @k1) mv1 v1
         let e2 = finalEntry (Proxy @k2) mv2 v2
@@ -205,10 +205,10 @@ instance ( KnownSymbol k1, IsValue v1
                 ) = (v1, v2, v3, v4)
 
     method _ action f dict = do
-        mv1 <- retrieve @k1 @v1 Proxy dict
-        mv2 <- retrieve @k2 @v2 Proxy dict
-        mv3 <- retrieve @k3 @v3 Proxy dict
-        mv4 <- retrieve @k4 @v4 Proxy dict
+        mv1 <- retrieve @k1 @v1 Proxy False dict
+        mv2 <- retrieve @k2 @v2 Proxy False dict
+        mv3 <- retrieve @k3 @v3 Proxy False dict
+        mv4 <- retrieve @k4 @v4 Proxy False dict
         let (v1, v2, v3, v4) = action
         let e1 = finalEntry (Proxy @k1) mv1 v1
         let e2 = finalEntry (Proxy @k2) mv2 v2
@@ -240,11 +240,11 @@ instance ( KnownSymbol k1, IsValue v1
                 ) = (v1, v2, v3, v4, v5)
 
     method _ action f dict = do
-        mv1 <- retrieve @k1 @v1 Proxy dict
-        mv2 <- retrieve @k2 @v2 Proxy dict
-        mv3 <- retrieve @k3 @v3 Proxy dict
-        mv4 <- retrieve @k4 @v4 Proxy dict
-        mv5 <- retrieve @k5 @v5 Proxy dict
+        mv1 <- retrieve @k1 @v1 Proxy False dict
+        mv2 <- retrieve @k2 @v2 Proxy False dict
+        mv3 <- retrieve @k3 @v3 Proxy False dict
+        mv4 <- retrieve @k4 @v4 Proxy False dict
+        mv5 <- retrieve @k5 @v5 Proxy False dict
         let (v1, v2, v3, v4, v5) = action
         let e1 = finalEntry (Proxy @k1) mv1 v1
         let e2 = finalEntry (Proxy @k2) mv2 v2
@@ -281,12 +281,12 @@ instance ( KnownSymbol k1, IsValue v1
                 ) = (v1, v2, v3, v4, v5, v6)
 
     method _ action f dict = do
-        mv1 <- retrieve @k1 @v1 Proxy dict
-        mv2 <- retrieve @k2 @v2 Proxy dict
-        mv3 <- retrieve @k3 @v3 Proxy dict
-        mv4 <- retrieve @k4 @v4 Proxy dict
-        mv5 <- retrieve @k5 @v5 Proxy dict
-        mv6 <- retrieve @k6 @v6 Proxy dict
+        mv1 <- retrieve @k1 @v1 Proxy False dict
+        mv2 <- retrieve @k2 @v2 Proxy False dict
+        mv3 <- retrieve @k3 @v3 Proxy False dict
+        mv4 <- retrieve @k4 @v4 Proxy False dict
+        mv5 <- retrieve @k5 @v5 Proxy False dict
+        mv6 <- retrieve @k6 @v6 Proxy False dict
         let (v1, v2, v3, v4, v5, v6) = action
         let e1 = finalEntry (Proxy @k1) mv1 v1
         let e2 = finalEntry (Proxy @k2) mv2 v2
@@ -308,18 +308,21 @@ retrieve :: forall key value c m
             , KnownSymbol key
             )
          => Proxy (key :: Symbol)
+         -> Bool
          -> TestVector ()
          -> GoldenMT c m (Maybe (Entry (Type, Value, value)))
-retrieve pk dict = case query pk dict of
+retrieve pk isInput dict = case query pk dict of
     Nothing -> pure Nothing
     Just e ->
-        let en = checkEntryType (Proxy @value) e
+        let en = checkEntryType (Proxy @value) e isInput
          in case parser @value (snd $ entryExtra en) of
             Left err -> error $ err <> "\n  While decoding " <> k <> " of type " <> show ty
             Right v  -> pure $ Just $ Entry
-                { entryKey = entryKey en
-                , entryType = entryType en
+                { entryKey   = entryKey en
+                , entryType  = entryType en
                 , entryValue = entryValue en
+                , entryInput = entryInput en
+                , entryDoc   = entryDoc en
                 , entryExtra = (fst (entryExtra en), snd (entryExtra en), v)
                 }
   where

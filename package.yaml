@@ -35,7 +35,7 @@ library:
     - Inspector.Method
     - Inspector.Monad
 #    - Inspector.Report
-#    - Inspector.Export.Markdown
+    - Inspector.Export.Markdown
     - Inspector.Export.Rust
     - Inspector.Export.Types
     - Inspector.Export.RefFile

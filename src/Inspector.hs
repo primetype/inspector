@@ -33,6 +33,7 @@ import Inspector.Export.Types
 import Inspector.Export.RefFile
 import qualified Inspector.Export.Diff as Diff
 import qualified Inspector.Export.Rust as Rust
+import qualified Inspector.Export.Markdown as Markdown
 
 import           Inspector.TestVector.Types      (Type)
 import           Inspector.TestVector.Value      (Value)
@@ -59,14 +60,13 @@ defaultMain suites = CLI.defaultMain $ do
     CLI.programVersion $ Version [0,1] ["alpha"]
     CLI.programDescription "Golden Tests and test vectors management"
 
+    CLI.command "test" $ runCommandTest suites
+    CLI.command "generate" $ runCommandGenerate suites
+
+runCommandTest :: GoldenT () -> CLI.OptionDesc (IO ()) ()
+runCommandTest suites = do
     goldenpath <- CLI.flagParam (CLI.FlagShort 'd' <> CLI.FlagLong "root" <> CLI.FlagDescription "root path for the golden tests")
                                 (CLI.FlagRequired (Right . fromString))
-
-    CLI.command "test" $ runCommandTest goldenpath suites
-    CLI.command "generate" $ runCommandGenerate goldenpath suites
-
-runCommandTest :: CLI.FlagParam FilePath -> GoldenT () -> CLI.OptionDesc (IO ()) ()
-runCommandTest goldenpath suites = do
     CLI.action $ \get -> do
         let p = fromMaybe "tests/goldens" (get goldenpath)
         void $ runGolden' (Config GoldenTest p False) $ do
@@ -74,20 +74,29 @@ runCommandTest goldenpath suites = do
             t <- goldenTFailed
             when t $ error "Failed due to previous errors."
 
-runCommandGenerate :: CLI.FlagParam FilePath -> GoldenT () -> CLI.OptionDesc (IO ()) ()
-runCommandGenerate goldenpath suites = do
-    out <- CLI.flag $ CLI.FlagLong "stdout" <> CLI.FlagDescription "generate to stdout instead of the appropriate file path"
-
-    CLI.command "rust" $ generate (Generate Rust) out
-    CLI.command "markdown" $ generate (Generate Markdown) out
-    CLI.command "test-vectors" $ generate (Generate TestVector) out
+runCommandGenerate :: GoldenT () -> CLI.OptionDesc (IO ()) ()
+runCommandGenerate suites = do
+    CLI.command "rust" $ do
+        CLI.description "Generate the test vector in rust compatible format."
+        generate (Generate Rust)
+    CLI.command "markdown" $ do
+        CLI.description "Generate markdown output of the test vectors."
+        generate (Generate Markdown)
+    CLI.command "test-vectors" $ do
+        CLI.description "Not supported, comming soon"
+        generate (Generate TestVector)
   where
-    generate gen outf = CLI.action $ \get -> do
-        let p = fromMaybe "tests/goldens" (get goldenpath)
-        void $ runGolden' (Config gen p (get outf)) $ do
-            void $ suites
-            t <- goldenTFailed
-            when t $ error "Failed due to previous errors."
+    generate gen = do
+        goldenpath <- CLI.flagParam (CLI.FlagShort 'd' <> CLI.FlagLong "root" <> CLI.FlagDescription "root path for the golden tests")
+                                    (CLI.FlagRequired (Right . fromString))
+        out <- CLI.flag $ CLI.FlagLong "stdout" <> CLI.FlagDescription "generate to stdout instead of the appropriate file path"
+
+        CLI.action $ \get -> do
+            let p = fromMaybe "tests/goldens" (get goldenpath)
+            void $ runGolden' (Config gen p (get out)) $ do
+                void $ suites
+                t <- goldenTFailed
+                when t $ error "Failed due to previous errors."
 
 -- | group a set of golden tests
 group :: GoldenT () -> GoldenT ()
@@ -117,21 +126,16 @@ golden proxy action = do
     -- 3. keep only result
     let tv3 = flip fmap tv2 $ \(a,_,c) -> (a, c) 
     case mode of
-        GoldenTest -> Diff.run input tv3
-        Generate Rust -> Rust.run input tv3
-        _             -> undefined
+        GoldenTest        -> Diff.run input tv3
+        Generate Rust     -> Rust.run input tv3
+        Generate Markdown -> Markdown.run input tv3
+        _                 -> undefined
   where
     input :: FilePath
     input = unsafeFilePath Relative path'
 
     path' = getPath proxy
-{-
-    output :: Mode -> Maybe FilePath
-    output (Generate TestVector) = Nothing
-    output (Generate Markdown) = Nothing -- Just $ fromString (filePathToLString input <> ".md")
-    output (Generate Rust) = Nothing -- Just $  fromString (filePathToLString input <> ".rs")
-    output GoldenTest = Nothing
--}
+
 traverseWith :: forall method c . (Golden method, Monoid c)
              => (forall a k . (IsValue a, KnownSymbol k) => Proxy k -> Entry (Type, Value, a) -> GoldenMT c IO ())
              -> Proxy method

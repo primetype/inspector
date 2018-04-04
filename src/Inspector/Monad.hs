@@ -115,8 +115,10 @@ store pk ent = withState $ \dict ->
   where
     (t, _, a) = entryExtra ent
     ent' = Entry
-        { entryType = entryType ent
+        { entryType  = entryType ent
         , entryValue = entryValue ent
-        , entryKey = entryKey ent
+        , entryKey   = entryKey ent
+        , entryInput = entryInput ent
+        , entryDoc   = entryDoc ent
         , entryExtra = (t, entryValue ent, builder a)
         }

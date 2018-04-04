@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 8e5c89921ea7dd6502705248f094bcf952541d5f62b9cd5e70a7bc4a6543410a
+-- hash: 01e2fb4d3965c4d87e86cedb8f421a214f289562749939b7ef6b55d93764dd0e
 
 name:           inspector
 version:        0.2
@@ -37,6 +37,7 @@ library
   other-modules:
       Inspector.Method
       Inspector.Monad
+      Inspector.Export.Markdown
       Inspector.Export.Rust
       Inspector.Export.Types
       Inspector.Export.RefFile

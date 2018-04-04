@@ -1,97 +1,84 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE Rank2Types #-}
+{-# LANGUAGE FlexibleContexts #-}
 
 module Inspector.Export.Markdown
-    ( pop
-    , summary
+    ( run
     ) where
 
 import Foundation
+import Foundation.VFS.FilePath (FilePath)
+import Foundation.Collection (nonEmpty_)
 import Foundation.Monad
-import Foundation.VFS
+import Foundation.IO (withFile, IOMode(..), hPut)
 import Foundation.VFS.FilePath
+import Foundation.String (toBytes, Encoding(UTF8))
 
-import Foundation.Conduit
+import Control.Monad (forM_, mapM_)
 
+import Inspector.Monad (GoldenT, Config(..), ask, mkPath)
+import Inspector.Builder
+import Inspector.TestVector.TestVector (TestVector, Entry(..), inputs, outputs)
+import Inspector.TestVector.Value (Value, valueBuilder)
+import Inspector.TestVector.Types (Type)
+import Inspector.TestVector.Key (keyToString)
 
-import Foundation.Collection (Element)
+run :: FilePath -> [(Word, TestVector (Type, Value, Value))] -> GoldenT ()
+run path tvs = do
+    stdout <- getStdout <$> ask
+    fp <- mkfp
 
-import Inspector.Dict
-import Inspector.Monad hiding (summary)
+    let out = runBuilder $ buildMarkdown path tvs
 
-import Inspector.Method
-
-import Inspector.Export.Types
-
-
-
-
-
-summary :: Golden method
-        => Proxy method
-        -> Conduit a String GoldenT ()
-summary p = do
-    meta <- lift getMetadata
-    yield $ "# " <> path <> "\n\n"
-    yield (metaDescription meta <> "\n")
-    yield "\n"
-    yield "## Input(s)\n\n"
-    yield "```\n"
-    yields $ for inputs $ \(Description key enc ty _ mcomm) ->
-        let comm = maybe "" (" # " <>) mcomm
-         in key <> " (" <> show ty <> ") = " <> show enc <> comm <> "\n"
-    yield "```\n"
-    yield "\n"
-    yield "## Output(s)\n\n"
-    yield "```\n"
-    yields $ for outputs $ \(Description key enc ty _ mcomm) ->
-        let comm = maybe "" (" # " <>) mcomm
-         in key <> " (" <> show ty <> ") = " <> show enc <> comm <> "\n"
-    yield "```\n"
-    yield "\n"
-    yield "# Test vectors\n\n"
+    liftIO $ if stdout
+        then putStr out
+        else withFile fp  WriteMode $ flip hPut (toBytes UTF8 out)
   where
-    path = filePathToString $ unsafeFilePath Relative (getPath p)
-    Export inputs outputs = describe p
+    mkfp = do
+        fp <- mkPath path
+        pure $ fromString $ toList $ (filePathToString fp) <> ".md"
 
-pop :: (Monad m, Golden method) => Proxy method -> Conduit (Word, Dict) String m ()
-pop p = awaitForever $ \(idx, dic) -> do
-    let is = findKeyVal dic inputs
-    let os = findKeyVal dic outputs
-    yield $ "## Test vector " <> show idx <> "\n\n"
-    yield "```\n"
-    yields $ for is $ \(k,v) -> k <> " = " <> buildIntermediarType "" v <> "\n"
-    yield "\n"
-    yields $ for os $ \(k,v) -> k <> " = " <> buildIntermediarType "" v <> "\n"
-    yield "```\n"
-    yield "\n"
+buildMarkdown :: FilePath -> [(Word, TestVector (Type, Value, Value))] -> Builder ()
+buildMarkdown path tvs = do
+    emit ("# " <> (filePathToString path)) >> newline
+    newline
+    defineTestVector $ snd $ head $ nonEmpty_ tvs
+    newline
+    emit "## Test Vectors" >> newline
+    newline
+    forM_ tvs $ \(testNumber, tv) -> declareTestVector testNumber tv
+
+declareTestVector :: Word -> TestVector (Type, Value, Value) -> Builder ()
+declareTestVector n tv = do
+    emit ("### Test vector n°" <> show n) >> newline
+    newline
+    emit "```" >> newline
+    mapM_ go (inputs tv)
+    newline
+    mapM_ go (outputs tv)
+    emit "```" >> newline
+    newline
   where
-    Export inputs outputs = describe p
+    go e = do
+        let (t, v, _) = entryExtra e
+        let str = keyToString (entryKey e) <> " = "
+        emit str
+        indent (length str)
+        valueBuilder v t
+        unindent
+        newline
 
-for :: [a] -> (a -> b) -> [b]
-for = flip fmap
-
-findKeyVal :: Dict -> [Description] -> [Element Dict]
-findKeyVal _ [] = []
-findKeyVal d (Description k _ _ _ _:xs) = case lookup k d of
-    Nothing -> error $ "missing input: " <> k
-    Just v  -> (k, v) : findKeyVal d xs
-
-buildIntermediarType :: String -> IntermediarType -> String
-buildIntermediarType alignment it = case it of
-    ITBoolean    b   -> if b then "true" else "false"
-    ITInteger    i   -> show i
-    ITDouble     d   -> show d
-    ITString     str -> show str
-    ITCollection [] -> "[]"
-    ITCollection [x] -> "[ " <> buildIntermediarType alignment x <> " ]"
-    ITCollection xs  -> "[ "
-                     <> intercalate ("\n"<> alignment <> ", ")
-                                    (buildIntermediarType (alignment <> "  ") <$> xs)
-                     <> "\n" <> alignment <> "]"
-    ITStructure  [] -> "{}"
-    ITStructure  [(n,v)] -> "{ " <> n <> " : " <> buildIntermediarType (alignment <> replicate (length n) ' ' <> "     ") v <> " }"
-    ITStructure  str -> "{ "
-                     <> intercalate ("\n"<> alignment <> ", ")
-                                    ((\(n, v) -> n <> " : " <> buildIntermediarType (alignment <> replicate (length n) ' ' <> "     ") v) <$> str)
-                     <> "\n" <> alignment <> "}"
+defineTestVector :: TestVector (Type, Value, Value) -> Builder ()
+defineTestVector tv = do
+    go "Inputs" (inputs tv)
+    newline
+    go "Outputs" (outputs tv)
+  where
+    go ty l = do
+        emit ("## " <> ty) >> newline
+        newline
+        emit "```" >> newline
+        forM_ l $ \e -> do
+            emit $ (keyToString $ entryKey e) <> " = " <> fromMaybe "No documentation" (entryDoc e)
+            newline
+        emit "```" >> newline
