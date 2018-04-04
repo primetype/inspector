@@ -31,6 +31,8 @@ library:
   source-dirs: src
   exposed-modules:
     - Inspector
+    - Inspector.TestVector.Types
+    - Inspector.TestVector.Value
   other-modules:
     - Inspector.Method
     - Inspector.Monad
@@ -43,8 +45,6 @@ library:
     - Inspector.Parser
     - Inspector.Builder
     - Inspector.TestVector.Key
-    - Inspector.TestVector.Types
-    - Inspector.TestVector.Value
     - Inspector.TestVector.TestVector
   dependencies:
     - cli

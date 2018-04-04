@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 01e2fb4d3965c4d87e86cedb8f421a214f289562749939b7ef6b55d93764dd0e
+-- hash: d779badf0fd18747cc4d559b0f5133b3a11d106adfdf63128ed305f1dbac2ce0
 
 name:           inspector
 version:        0.2
@@ -34,6 +34,8 @@ library
     , memory >=0.14.15
   exposed-modules:
       Inspector
+      Inspector.TestVector.Types
+      Inspector.TestVector.Value
   other-modules:
       Inspector.Method
       Inspector.Monad
@@ -45,8 +47,6 @@ library
       Inspector.Parser
       Inspector.Builder
       Inspector.TestVector.Key
-      Inspector.TestVector.Types
-      Inspector.TestVector.Value
       Inspector.TestVector.TestVector
   default-language: Haskell2010
 

@@ -13,18 +13,20 @@ module Inspector.Export.Types
     , fromEntry
     , checkEntryType
     , liftValue
+    , reportError
 
     , withBoolean
     , withInteger
     , withDouble
     , withString
     , withCollection
-    , withStructure
+    , withStructure, field
     ) where
 
 import Foundation
 import Foundation.String (fromBytesUnsafe)
 import Foundation.String.Builder
+import qualified Foundation.Collection as F
 
 import Basement.Block (Block)
 import Basement.Nat
@@ -42,7 +44,7 @@ import GHC.ST (runST)
 
 import           Inspector.TestVector.Types      (Type)
 import qualified Inspector.TestVector.Types as Type
-import           Inspector.TestVector.Key        (Key)
+import           Inspector.TestVector.Key        (Key, keyToString)
 import           Inspector.TestVector.Value      (Value)
 import qualified Inspector.TestVector.Value as Value
 import           Inspector.TestVector.TestVector (Entry(..))
@@ -91,6 +93,11 @@ withCollection t _ r                 = reportError t r
 withStructure :: String -> (Value.Object -> Either String a) -> Value -> Either String a
 withStructure _ f (Value.Object nits) = f nits
 withStructure t _ r                   = reportError t r
+
+field :: Value.Object -> Key -> Either String Value
+field obj k = case F.lookup k obj of
+    Nothing -> reportError ("missing field: " <> keyToString k) (Value.Object obj)
+    Just r  -> pure r
 
 class Inspectable a where
     documentation :: Proxy a -> String

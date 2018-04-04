@@ -17,7 +17,15 @@ module Inspector
 
     , -- ** Extending Inspectable
       Inspectable(..)
+    , reportError
     , OutputType(..)
+    , withBoolean
+    , withInteger
+    , withDouble
+    , withString
+    , withCollection
+    , withStructure
+    , field
 
     , -- * Misc
       Config(..)
