@@ -1,8 +1,6 @@
 # Test Vector 1
 TestVector
+parameters = { iter = 10000, len = 64 }
 hash = "a2c2646186828474b754591a547c18f132d88d744c152655a470161a1a0521353263e5f7e0793eec45dc2cf62066f632abcc75756381fd3f0921e9d786c763e6"
-iter = 10000
 password = "password"
 salt = "salt"
-size = 64
-
