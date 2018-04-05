@@ -53,7 +53,7 @@ builderToString :: Builder -> String
 builderToString a = runST (runUnsafe a)
 
 data OutputType
-    = TestVector
+    = TestVectors
     | Markdown
     | Rust
   deriving (Show, Eq, Ord, Enum, Bounded, Typeable)

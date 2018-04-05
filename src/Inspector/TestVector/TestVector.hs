@@ -50,7 +50,7 @@ entryParser = do
 
 entryBuilder :: Entry (Type, Value) -> Builder ()
 entryBuilder Entry{..} = do
-    emit (show (keyToString entryKey)) >> emit " = "
+    emit (keyToString entryKey) >> emit " = "
     -- align to the given key length
     indent $ length (keyToString entryKey) + 3
     -- build the value based on the type
@@ -82,10 +82,10 @@ outputs = filter (not . fromMaybe undefined . entryInput) . fmap snd . toList
 
 query :: KnownSymbol key => Proxy key -> TestVector a -> Maybe (Entry a)
 query = F.lookup . symbolKey_
-    
+
 add' :: Key -> Entry a -> TestVector a -> TestVector a
 add' key val (TestVector l) = TestVector $ (key, val) : l
-    
+
 add :: KnownSymbol key => Proxy key -> Entry a -> TestVector a -> TestVector a
 add p = add' (symbolKey_ p)
 

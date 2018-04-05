@@ -40,6 +40,7 @@ import Inspector.Monad
 import Inspector.Method
 import Inspector.Export.Types
 import Inspector.Export.RefFile
+import qualified Inspector.Export.RefFile as RefFile
 import qualified Inspector.Export.Diff as Diff
 import qualified Inspector.Export.Rust as Rust
 import qualified Inspector.Export.Markdown as Markdown
@@ -96,8 +97,8 @@ runCommandGenerate suites = do
         CLI.description "Generate markdown output of the test vectors."
         generate (Generate Markdown)
     CLI.command "test-vectors" $ do
-        CLI.description "Not supported, comming soon"
-        generate (Generate TestVector)
+        CLI.description "Generate the test vector output"
+        generate (Generate TestVectors)
   where
     generate gen = do
         goldenpath <- CLI.flagParam (CLI.FlagShort 'd' <> CLI.FlagLong "root" <> CLI.FlagDescription "root path for the golden tests")
@@ -137,12 +138,12 @@ golden proxy action = do
     -- 2. run the method against each TestVector
     !tv2 <- runConduit $ yields tv1 .| traverseWith store proxy action .| sinkList
     -- 3. keep only result
-    let tv3 = flip fmap tv2 $ \(a,_,c) -> (a, c) 
+    let tv3 = flip fmap tv2 $ \(a,_,c) -> (a, c)
     case mode of
         GoldenTest        -> Diff.run input tv3
         Generate Rust     -> Rust.run input tv3
         Generate Markdown -> Markdown.run input tv3
-        _                 -> undefined
+        Generate TestVectors -> RefFile.run input tv3
   where
     input :: FilePath
     input = unsafeFilePath Relative path'
@@ -166,4 +167,3 @@ awaitIndex f = go 1
         case mv of
             Nothing -> pure ()
             Just v  -> f acc v >> go (succ acc)
-    

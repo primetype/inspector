@@ -23,7 +23,7 @@ import           Foundation.String.Read
 
 import           Basement.Bounded
 
-import           Inspector.TestVector.Key (Key, keyParser)
+import           Inspector.TestVector.Key (Key, keyParser, keyToString)
 import           Inspector.TestVector.Types (Type)
 import qualified Inspector.TestVector.Types as Type
 import           Inspector.Parser (Parser)
@@ -144,7 +144,20 @@ valueBuilder (Array arr) t
                 indent 2 >> valueBuilder v (Type.innerType t) >> unindent
                 newline
             emit "]"
-valueBuilder (Object _) _ = undefined
+valueBuilder (Object obj) _ = case toList obj of
+    [] -> emit "{}"
+    [(k,v)] -> do
+        let str = keyToString k <> " = "
+        emit "{ " >> emit str >> indent (2 + length str) >> valueBuilder v (getValueType v) >> unindent >> emit " }"
+    (k1,v1):xs -> do
+        let str = "{ " <> keyToString k1 <> " = "
+        emit str >> indent (length str) >> valueBuilder v1 (getValueType v1) >> unindent >> newline
+        forM_ xs $ \(k, v) -> do
+            let str' = ", " <> keyToString k <> " = "
+            emit str' >> indent (length str) >> valueBuilder v (getValueType v) >> unindent
+            newline
+        emit "}"
+
 
 hexadecimalBuilder :: Value -> Type -> Builder ()
 hexadecimalBuilder (Integer x) Type.Signed8    = pad 2 x

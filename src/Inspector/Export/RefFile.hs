@@ -7,10 +7,12 @@ module Inspector.Export.RefFile
     , testVectorSinkC
     , parseTestVectorFile
     , writeTestVectorFile
+    , run
     ) where
 
 import Foundation
 import Foundation.IO
+import Foundation.Monad
 import Foundation.Conduit
 import Foundation.Conduit.Textual
 import Foundation.String (Encoding(UTF8))
@@ -20,11 +22,35 @@ import qualified Foundation.Parser as Parser
 
 import           Inspector.TestVector.Types (Type)
 import           Inspector.TestVector.Value (Value)
-import           Inspector.TestVector.TestVector (TestVector, testVectorBuilder, testVectorParser)
+import           Inspector.TestVector.TestVector (TestVector, Entry(..), testVectorBuilder, testVectorParser)
 import           Inspector.Builder
+import           Inspector.Monad
 import           Inspector.Parser
 
 import Data.List (zip)
+
+run :: FilePath -> [(Word, TestVector (Type, Value, Value))] -> GoldenT ()
+run path tvs = do
+    needStdout <- getStdout <$> ask
+    fp <- mkPath path
+
+    let tvs' = flip fmap tvs $ \(w, tv) -> (w, fromList $ filterEntry <$> toList tv)
+
+    liftIO $ if needStdout
+        then runConduit $ yields tvs' .| testVectorSinkC .| toBytes UTF8 .| sinkHandle stdout
+        else withFile fp WriteMode $ \h -> runConduit $
+                yields tvs' .| testVectorSinkC .| toBytes UTF8 .| sinkHandle h
+  where
+    filterEntry (k, e) = (k,e')
+      where
+        e' = Entry
+            { entryKey = entryKey e
+            , entryType = entryType e
+            , entryInput = entryInput e
+            , entryValue = entryValue e
+            , entryDoc = entryDoc e
+            , entryExtra = let (a,_,c) = entryExtra e in (a,c)
+            }
 
 writeTestVectorFile :: FilePath -> [TestVector (Type, Value)] -> IO ()
 writeTestVectorFile fp tvs = withFile fp WriteMode $ \h -> runConduit $
