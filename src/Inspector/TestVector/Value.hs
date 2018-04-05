@@ -154,7 +154,7 @@ valueBuilder (Object obj) _ = case toList obj of
         emit str >> indent (length str) >> valueBuilder v1 (getValueType v1) >> unindent >> newline
         forM_ xs $ \(k, v) -> do
             let str' = ", " <> keyToString k <> " = "
-            emit str' >> indent (length str) >> valueBuilder v (getValueType v) >> unindent
+            emit str' >> indent (length str') >> valueBuilder v (getValueType v) >> unindent
             newline
         emit "}"
 
