@@ -68,9 +68,9 @@ consumeTestVectors l = emit "[ " >> go False l >> emit "];" >> newline
         unindent >> emit "  }" >> newline
         go True xs
     go' ent = do
-        let str = keyToString (entryKey ent)
+        let str = keyToString (entryKey ent) <> ": "
         let (t, v, _) = entryExtra ent
-        emit str >> emit ": " >> valueBuilder (entryKey ent) (liftValue t v) >> emit "," >> newline
+        emit str >> indent (length str) >> valueBuilder (entryKey ent) (liftValue t v) >> emit "," >> unindent >> newline
 
 defineTestVector :: TestVector (Type, Value, Value) -> Builder ()
 defineTestVector tv = do
@@ -230,19 +230,27 @@ valueBuilder _ (Value.Integer i)  = emit (show i)
 valueBuilder _ (Value.Floating f) = emit (show f) -- TODO
 valueBuilder _ (Value.String s)   = emit (show s)
 valueBuilder k (Value.Array arr) = case toList arr of
-        []     -> emit "&[]"
-        [x]    -> emit "&[ " >> valueBuilder k x >> emit " ]"
+        []     -> emit "[]"
+        [x]    -> emit "[ " >> valueBuilder k x >> emit " ]"
         (x:xs) -> do
-            emit "&[ " >> valueBuilder k x
+            emit "[ " >> valueBuilder k x
             forM_ xs $ \v -> emit ", " >> valueBuilder k v
             emit "]"
 valueBuilder k (Value.Object obj) = case toList obj of
     [] -> emit "{}"
-    [(k1,v1)] -> emit tn >> emit " { " >> emit (keyToString k1) >> emit ": " >> valueBuilder k1 v1 >> emit " }"
+    [(k1,v1)] -> do
+        let str = tn <> " { " <> keyToString k1 <> ": "
+        emit str >> indent (length str) >> valueBuilder k1 v1 >> unindent >> emit " }"
     ((k1,v1):xs) -> do
-        emit tn >> emit " {" >> emit (keyToString k1) >> emit ": " >> valueBuilder k1 v1
-        forM_ xs $ \(k', v) -> emit ", " >> emit (keyToString k') >> emit ": " >> valueBuilder k' v
-        emit "}"
+        emit tn
+        indent (length tn)
+        let str1 = " { " <> keyToString k1 <> ": "
+        emit str1 >> indent (length str1) >> valueBuilder k1 v1 >> unindent >> newline
+        forM_ xs $ \(k', v) -> do
+            let str = " , " <> keyToString k' <> ": "
+            emit str >> indent (length str) >> valueBuilder k' v >> unindent >> newline
+        emit " }"
+        unindent
   where
     Just (a, b) = F.uncons $ keyToString k
     tn = (upper $ singleton a) <> b
