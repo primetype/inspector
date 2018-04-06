@@ -147,7 +147,20 @@ fromEntry _ e = first show $ parser (snd $ entryExtra e)
 liftValue :: Type -> Value -> Value
 liftValue t v
     | Type.isByteArray t = toByteArray v
-    | otherwise          = v
+    | otherwise          = case (t, v) of
+        (Type.Array  arrTy, Value.Array  arr) -> Value.Array  $ liftArray  arrTy arr
+        (Type.Object objTy, Value.Object obj) -> Value.Object $ liftObject objTy obj
+        _                                     -> v
+  where
+    liftArray (Type.SizedArray   t' _) arr = fromList $ liftValue t' <$> toList arr
+    liftArray (Type.UnsizedArray t') arr = fromList $ liftValue t' <$> toList arr
+
+    liftObject objdef obj = fromList $ linktype (toList objdef) obj
+      where
+        linktype [] _ = []
+        linktype ((k,t'):ts) vs = case F.lookup k vs of
+            Nothing -> error $ "undefined value for key: " <> keyToString k
+            Just v' -> (k, liftValue t' v') : linktype ts vs
 
 toByteArray :: Value -> Value
 toByteArray (Value.String str)
