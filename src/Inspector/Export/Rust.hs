@@ -8,15 +8,13 @@ module Inspector.Export.Rust
     ) where
 
 import Foundation
-import Foundation.String (upper)
-import Foundation.VFS.FilePath (FilePath)
 import Foundation.Collection (nonEmpty_, KeyedCollection, IndexedCollection, Element)
 import qualified Foundation.Collection as F
 import Foundation.Monad
 import Foundation.Monad.State
 import Foundation.IO (withFile, IOMode(..), hPut)
 import Foundation.VFS.FilePath
-import Foundation.String (toBytes, Encoding(UTF8))
+import Foundation.String (upper, toBytes, Encoding(UTF8))
 
 import Control.Monad (forM_, forM, when)
 
@@ -24,12 +22,11 @@ import Inspector.Monad (GoldenT, Config(..), ask, mkPath)
 import Inspector.Builder
 import Inspector.Export.Types (liftValue)
 import Inspector.TestVector.TestVector (TestVector, Entry(..), inputs, outputs)
-import Inspector.TestVector.Key (Key)
+import Inspector.TestVector.Key (Key, keyToString)
 import Inspector.TestVector.Value (Value)
 import qualified Inspector.TestVector.Value as Value
 import Inspector.TestVector.Types (Type)
 import qualified Inspector.TestVector.Types as Type
-import Inspector.TestVector.Key (keyToString)
 
 run :: FilePath -> [(Word, TestVector (Type, Value, Value))] -> GoldenT ()
 run path tvs = do
@@ -124,7 +121,7 @@ mkTypeName :: LString -> Maybe TypeName
 mkTypeName str = if isOk then Just (TypeName $ fromList str) else Nothing
   where
     !isOk = and $ check <$> str
-    check c = elem c valids
+    check c = c `elem` valids
     !valids = ['a'..'z'] <> ['A'..'Z'] <> ['0'..'9'] <> ['_']
 
 data RustType
@@ -220,7 +217,7 @@ emitType t = case t of
 
 emitArray :: Type.Array -> Builder ()
 emitArray (Type.SizedArray ty sz) =
-    emit "[" >> emitType ty >> emit (";" <> show sz <> "]")
+    emit "&'static [" >> emitType ty >> emit (";" <> show sz <> "]")
 emitArray (Type.UnsizedArray ty) =
     emit "&'static [" >> emitType ty >> emit "]"
 
@@ -230,10 +227,10 @@ valueBuilder _ (Value.Integer i)  = emit (show i)
 valueBuilder _ (Value.Floating f) = emit (show f) -- TODO
 valueBuilder _ (Value.String s)   = emit (show s)
 valueBuilder k (Value.Array arr) = case toList arr of
-        []     -> emit "[]"
-        [x]    -> emit "[ " >> valueBuilder k x >> emit " ]"
+        []     -> emit "& []"
+        [x]    -> emit "& [ " >> valueBuilder k x >> emit " ]"
         (x:xs) -> do
-            emit "[ " >> valueBuilder k x
+            emit "& [ " >> valueBuilder k x
             forM_ xs $ \v -> emit ", " >> valueBuilder k v
             emit "]"
 valueBuilder k (Value.Object obj) = case toList obj of
