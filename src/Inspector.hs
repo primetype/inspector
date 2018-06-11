@@ -1,5 +1,4 @@
 {-# LANGUAGE Rank2Types #-}
-{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE BangPatterns #-}
 
@@ -30,7 +29,6 @@ module Inspector
     , -- * Misc
       Config(..)
     , Mode(..)
-    , defaultMain
     , defaultTest
     , GoldenMT
     , GoldenT
@@ -57,60 +55,76 @@ import Foundation.VFS.FilePath
 import GHC.TypeLits (KnownSymbol)
 
 import Control.Monad (void, when)
-import Data.Version (Version(..))
-
-import qualified Console.Options as CLI
+import System.Console.GetOpt
+import qualified System.Environment as S (getArgs)
 
 -- | handy one for test suite for cabal
 defaultTest :: GoldenT () -> IO ()
-defaultTest = CLI.defaultMain . runCommandTest
-
--- | Inspector's default main function
---
--- will get the arguments and configure the 'Mode' from the command line
-defaultMain :: GoldenT () -> IO ()
-defaultMain suites = CLI.defaultMain $ do
-    CLI.programName "inspector"
-    CLI.programVersion $ Version [0,1] ["alpha"]
-    CLI.programDescription "Golden Tests and test vectors management"
-
-    CLI.command "test" $ runCommandTest suites
-    CLI.command "generate" $ runCommandGenerate suites
-
-runCommandTest :: GoldenT () -> CLI.OptionDesc (IO ()) ()
-runCommandTest suites = do
-    goldenpath <- CLI.flagParam (CLI.FlagShort 'd' <> CLI.FlagLong "root" <> CLI.FlagDescription "root path for the golden tests")
-                                (CLI.FlagRequired (Right . fromString))
-    CLI.action $ \get -> do
-        let p = fromMaybe "tests/goldens" (get goldenpath)
-        void $ runGolden' (Config GoldenTest p False) $ do
-            void $ suites
-            t <- goldenTFailed
-            when t $ error "Failed due to previous errors."
-
-runCommandGenerate :: GoldenT () -> CLI.OptionDesc (IO ()) ()
-runCommandGenerate suites = do
-    CLI.command "rust" $ do
-        CLI.description "Generate the test vector in rust compatible format."
-        generate (Generate Rust)
-    CLI.command "markdown" $ do
-        CLI.description "Generate markdown output of the test vectors."
-        generate (Generate Markdown)
-    CLI.command "test-vectors" $ do
-        CLI.description "Generate the test vector output"
-        generate (Generate TestVectors)
+defaultTest suites = do
+    args <- S.getArgs
+    (opts, command) <- case getOpt Permute options args of
+        (o, cmd,  []) -> return (o, cmd)
+        (_,   _, err) -> error $ show err
+    case command of
+        [] -> runCommandTest opts suites
+        ["help"] -> usage
+        ["test"] -> runCommandTest opts suites
+        ["generate"] -> runCommandGenerate opts "test-vectors" suites
+        ["generate", target] -> runCommandGenerate opts target suites
+        _ -> usage >> error ("invalid commands: " <> show command)
   where
-    generate gen = do
-        goldenpath <- CLI.flagParam (CLI.FlagShort 'd' <> CLI.FlagLong "root" <> CLI.FlagDescription "root path for the golden tests")
-                                    (CLI.FlagRequired (Right . fromString))
-        out <- CLI.flag $ CLI.FlagLong "stdout" <> CLI.FlagDescription "generate to stdout instead of the appropriate file path"
+    usage = putStrLn "\
+\usage: inspector [OPTIONS] [COMMANDS]\n\
+\\n\
+\OPTIONS:\n\
+\  `-d|--root <DIR>' the route directory where the golden tests are (default `./tests/goldens')\n\
+\  `--stdout'        display the generated output to stdout instead of files\n\
+\\n\
+\COMMANDS:\n\
+\  `help'              displays this help message\n\
+\  `test'              runs the golden tests suite (default command if none given)\n\
+\  `generate [TARGET]' generates the outputs for different test suites : `rust' or `markdown'\n\
+\\n\
+\"
 
-        CLI.action $ \get -> do
-            let p = fromMaybe "tests/goldens" (get goldenpath)
-            void $ runGolden' (Config gen p (get out)) $ do
-                void $ suites
-                t <- goldenTFailed
-                when t $ error "Failed due to previous errors."
+data InspectorOption
+    = RootDir LString
+    | GenStdout
+  deriving (Show, Eq, Ord, Typeable)
+
+options :: [OptDescr InspectorOption]
+options =
+    [ Option ['d'] ["root"] (ReqArg RootDir "DIR") "root directory of the golden test path"
+    , Option [] ["stdout"] (NoArg GenStdout) "generate to stdout"
+    ]
+
+getRootDir :: [InspectorOption] -> FilePath
+getRootDir [] = "tests/goldens"
+getRootDir (RootDir dir:_) = fromString (fromList dir)
+getRootDir (_: xs) = getRootDir xs
+
+getStdoutOpt :: [InspectorOption] -> Bool
+getStdoutOpt [] = False
+getStdoutOpt (GenStdout : _) = True
+getStdoutOpt (_:xs) = getStdoutOpt xs
+
+runCommandTest :: [InspectorOption] -> GoldenT () -> IO ()
+runCommandTest o suites = void $ runGolden' (Config GoldenTest (getRootDir o) (getStdoutOpt o)) $ do
+    void $ suites
+    t <- goldenTFailed
+    when t $ error "Failed due to previous errors."
+
+runCommandGenerate :: [InspectorOption] -> LString -> GoldenT () -> IO ()
+runCommandGenerate o target suites = case target of
+    "test-vectors" -> generate (Generate TestVectors)
+    "rust" -> generate (Generate Rust)
+    "markdown" -> generate (Generate Markdown)
+    _ -> error $ "unknown target: " <> show target
+  where
+    generate gen = void $ runGolden' (Config gen (getRootDir o) (getStdoutOpt o)) $ do
+        void suites
+        t <- goldenTFailed
+        when t $ error "Failed due to previous errors."
 
 -- | group a set of golden tests
 group :: GoldenT () -> GoldenT ()

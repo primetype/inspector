@@ -25,12 +25,14 @@ module Inspector.Monad
     , Builder
     ) where
 
-import Foundation
+import Foundation hiding ((<>))
 import Foundation.Monad
 import Foundation.Monad.Reader
 import Foundation.Monad.State
 import Foundation.VFS
 import Foundation.String.Builder
+
+import Basement.Compat.Semigroup
 
 import GHC.TypeLits
 
@@ -78,18 +80,19 @@ mkPath target = do
     let (_, t, _) = splitPath target
     pure $ buildPath (p, root <> t, ())
 
--- | Monad responsible for controlling the execution flow of the test vectors
---
 data Metadata = Metadata
     { metaDescription  :: !String
     , goldenTestFailed :: !Bool
     }
   deriving (Show, Eq, Typeable)
-instance Semigroup Metadata
+instance Semigroup Metadata where
+    (<>) = mappend
 instance Monoid Metadata where
     mempty = Metadata mempty False
     mappend (Metadata d1 t1) (Metadata d2 t2) = Metadata (d1 <> d2) (t1 && t2)
 
+-- | Monad responsible for controlling the execution flow of the test vectors
+--
 type GoldenT = GoldenMT Metadata IO
 
 summary :: String -> GoldenT ()

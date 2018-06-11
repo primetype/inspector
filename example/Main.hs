@@ -23,7 +23,7 @@ type GoldenPBKDF2 = "kdf" :> "PBKDF2" :> "SHA1"
                  :> Payload "parameters" Parameters :> Payload "password" String :> Payload "salt" String :> Payload "hash" Bytes
 
 main :: IO ()
-main = defaultMain $ do
+main = defaultTest $ do
     group $ do
         summary "Secure Hash Algorithm"
         golden (Proxy @GoldenSHA1) hash

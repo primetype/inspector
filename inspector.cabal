@@ -1,8 +1,8 @@
--- This file has been generated from package.yaml by hpack version 0.20.0.
+-- This file has been generated from package.yaml by hpack version 0.28.2.
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: d779badf0fd18747cc4d559b0f5133b3a11d106adfdf63128ed305f1dbac2ce0
+-- hash: 076fc959ff612b7b889c8f02ce5082b559a2a577496054a6777a4b71b2ba1938
 
 name:           inspector
 version:        0.2
@@ -15,7 +15,6 @@ license:        BSD3
 license-file:   LICENSE
 build-type:     Simple
 cabal-version:  >= 1.10
-
 extra-source-files:
     LICENSE
     README.md
@@ -28,7 +27,6 @@ library
   build-depends:
       base
     , basement >=0.0.7
-    , cli
     , cryptonite
     , foundation >=0.0.20
     , memory >=0.14.15
