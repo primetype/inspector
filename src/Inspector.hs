@@ -47,6 +47,8 @@ import           Inspector.TestVector.Types      (Type)
 import           Inspector.TestVector.Value      (Value)
 import           Inspector.TestVector.TestVector (Entry(..), TestVector)
 
+import Basement.Terminal as Terminal (initialize)
+
 import Foundation
 import Foundation.Monad
 import Foundation.Conduit
@@ -61,6 +63,7 @@ import qualified System.Environment as S (getArgs)
 -- | handy one for test suite for cabal
 defaultTest :: GoldenT () -> IO ()
 defaultTest suites = do
+    Terminal.initialize
     args <- S.getArgs
     (opts, command) <- case getOpt Permute options args of
         (o, cmd,  []) -> return (o, cmd)
