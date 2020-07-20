@@ -4,7 +4,6 @@ module Inspector.Export.Diff
 
 import Foundation
 import Foundation.VFS.FilePath (FilePath, filePathToString)
-import Foundation.Collection (filter)
 import Basement.Bounded (zn64)
 import qualified Basement.Terminal.ANSI as ANSI
 import Foundation.Monad
