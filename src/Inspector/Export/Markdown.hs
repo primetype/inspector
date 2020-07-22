@@ -7,7 +7,6 @@ module Inspector.Export.Markdown
     ) where
 
 import Foundation
-import Foundation.VFS.FilePath (FilePath)
 import Foundation.Collection (nonEmpty_)
 import Foundation.Monad
 import Foundation.IO (withFile, IOMode(..), hPut)

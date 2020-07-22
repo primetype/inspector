@@ -13,7 +13,6 @@ module Inspector.Builder
 import Foundation
 import Foundation.Monad
 import Foundation.Monad.State
-import Foundation.Collection (replicate)
 
 import qualified Foundation.String.Builder as Builder
 
