@@ -161,9 +161,11 @@ isTypeDefined ro = withState $ \dts ->
 
 mkDefinedType :: Key -> RustObject -> Convertor TypeName
 mkDefinedType k ro = withState $ \dts ->
-    let Just (x, xs) = F.uncons $ keyToString k
-        tn = TypeName $ (upper $ singleton x) <> xs
-     in (tn, F.cons (tn, ro) dts)
+    case F.uncons $ keyToString k of
+      Nothing -> error "mkDefinedType: uncons failed"
+      Just (x, xs) ->
+        let tn = TypeName $ (upper $ singleton x) <> xs
+         in (tn, F.cons (tn, ro) dts)
 
 convertType :: Key -> Type -> Convertor RustType
 convertType key ty = case ty of
@@ -250,5 +252,6 @@ valueBuilder k (Value.Object obj) = case toList obj of
         emit " }"
         unindent
   where
-    Just (a, b) = F.uncons $ keyToString k
-    tn = (upper $ singleton a) <> b
+    tn = case F.uncons $ keyToString k of
+           Nothing -> error "valueBuilder: uncons failed"
+           Just (a, b) -> (upper $ singleton a) <> b
