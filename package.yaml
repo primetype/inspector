@@ -14,8 +14,8 @@ dependencies:
   - base
   - basement >= 0.0.7
   - foundation >= 0.0.20
-  - memory >= 0.14.15
-  - cryptonite
+  - ram >= 0.22
+  - crypton
 
 default-extensions:
     - NoImplicitPrelude
@@ -34,6 +34,7 @@ library:
     - Inspector.TestVector.Types
     - Inspector.TestVector.Value
   other-modules:
+    - Inspector.Compat.ByteArray
     - Inspector.Method
     - Inspector.Monad
 #    - Inspector.Report

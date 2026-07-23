@@ -35,6 +35,7 @@ library
       Inspector.TestVector.Types
       Inspector.TestVector.Value
   other-modules:
+      Inspector.Compat.ByteArray
       Inspector.Method
       Inspector.Monad
       Inspector.Export.Markdown

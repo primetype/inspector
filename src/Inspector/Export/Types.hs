@@ -33,6 +33,8 @@ import Basement.Nat
 import Data.ByteArray (Bytes, convert)
 import Data.ByteArray.Encoding
 
+import Inspector.Compat.ByteArray ()
+
 import Crypto.Hash (Digest, digestFromByteString)
 import Crypto.Hash.IO (HashAlgorithm(..))
 import Crypto.MAC.HMAC (HMAC(..))
