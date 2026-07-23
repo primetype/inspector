@@ -29,7 +29,7 @@ library
     , basement >=0.0.7
     , crypton
     , foundation >=0.0.20
-    , memory >=0.14.15
+    , ram >= 0.22
   exposed-modules:
       Inspector
       Inspector.TestVector.Types
@@ -60,7 +60,7 @@ executable example
     , crypton
     , foundation >=0.0.20
     , inspector
-    , memory >=0.14.15
+    , ram >= 0.22
   other-modules:
       Paths_inspector
   default-language: Haskell2010
